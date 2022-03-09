@@ -1,7 +1,6 @@
-use rand_core::OsRng;
 
-extern crate alloc;
 pub mod ratchfuncs;
+pub mod encryption;
   
 
 pub fn hi(){
