@@ -1,18 +1,16 @@
 
-use x25519_dalek::{self, SharedSecret,PublicKey, StaticSecret};
+use x25519_dalek_ng::{self, SharedSecret,PublicKey, StaticSecret};
 use hkdf::Hkdf;
 use generic_array::{typenum::U32, GenericArray};
 use std::collections::HashMap;
 use sha2::Sha256;
 use rand_core::{OsRng,};
-use crate::encryption::{encrypt,decrypt};
-
-
-pub struct Header {
-    pub public_key: PublicKey,
-    pub pn: usize, // Previous Chain Length
-    pub n: usize, // Message Number
-}
+use super::{
+    encryption::{encrypt,decrypt},
+    serializer::{serialize_header, deserialize_header}
+};
+pub const CONSTANT_NONCE: [u8;13] = [42;13];
+pub const MAX_SKIP: usize = 200;
 pub struct state {
     dhs_priv: StaticSecret,
     dhs_pub: PublicKey,
@@ -31,7 +29,7 @@ impl state {
 
 
 
-    pub fn init_alice(sk: [u8; 32], bob_dh_public_key: PublicKey) -> Self {
+    pub fn init_r(sk: [u8; 32], bob_dh_public_key: PublicKey) -> Self {
         let alice_priv : StaticSecret  = StaticSecret::new(OsRng);
         let alice_pub = PublicKey::from(&alice_priv);
 
@@ -52,7 +50,7 @@ impl state {
     }
 
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
-    pub fn init_bob(sk: [u8; 32]) -> (Self, PublicKey) {
+    pub fn init_i(sk: [u8; 32]) -> (Self, PublicKey) {
         let bob_priv : StaticSecret  = StaticSecret::new(OsRng);
         let bob_pub = PublicKey::from(&bob_priv);
 
@@ -73,19 +71,89 @@ impl state {
     }
 
     /// Encrypt Plaintext with [Ratchet]. Returns Message [Header] and ciphertext.
-    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> (Header, Vec<u8>, [u8; 12]) {
+    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Option<(Header,Vec<u8>)> {
+
+   
+
+
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
-        let header = Header::new(&self.dhs, self.pn, self.ns);
+        let header = Header::new(self.dhs_pub, self.pn, self.ns);
         self.ns += 1;
-        let (encrypted_data, nonce) = encrypt(&mk, plaintext, &header.concat(ad));
-        (header, encrypted_data, nonce)
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &serialize_header(&header, &ad)); // concat
+
+        Some((header, encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
     }
 
+    fn skip_message_keys(&mut self, until: usize) -> Result<(), &str> {
+        if self.nr + MAX_SKIP < until {
+            return Err("Skipped to many keys");
+        }
+        match self.ckr {
+            Some(d) => {
+                while self.nr  < until {
+                    let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
+                    self.ckr = Some(ckr);
+                    self.mk_skipped.insert((self.dhr_pub.unwrap().as_bytes().to_vec(), self.nr), mk);
+                    self.nr += 1
+                }
+                Ok(())
+            },
+            None => { Err("No Ckr set") }
+        }
+    }
 
+    fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8; 13], ad: &[u8]) -> Option<Vec<u8>> {
+        if self.mk_skipped.contains_key(&(header.ex_public_key_bytes(), header.n)) {
+            let mk = *self.mk_skipped.get(&(header.ex_public_key_bytes(), header.n))
+                .unwrap();
+            self.mk_skipped.remove(&(header.ex_public_key_bytes(), header.n)).unwrap();
+            Some(decrypt(&mk[..16], ciphertext, &serialize_header(&header, &ad), nonce))
+        } else {
+            None
+        }
+    }
 
-//pub fn dh_ratchet()
+    pub fn ratchet_decrypt(&mut self, header: &Header, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+        let plaintext = self.try_skipped_message_keys(header, ciphertext, &CONSTANT_NONCE, ad);
+        match plaintext {
+            Some(d) => d,
+            None => {
+                if Some(header.public_key) != self.dhr_pub {
+                    if self.ckr != None {
+                        self.skip_message_keys(header.pn).unwrap();
+                    }
+                    self.dhratchet(header);
+                }
+                self.skip_message_keys(header.n).unwrap();
+                let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
+                self.ckr = Some(ckr);
+                self.nr += 1;
+                
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &serialize_header(&header, &ad));
+                out
+            }
+        }
+    }
 
+    fn dhratchet(&mut self, header: &Header) {
+        self.pn = self.ns;
+        self.ns = 0;
+        self.nr = 0;
+        self.dhr_pub = Some(header.public_key);
+        let (rk, ckr) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
+                               &self.rk);
+        
+        self.rk = rk;
+        self.ckr = Some(ckr);
+        self.dhs_priv = StaticSecret::new(OsRng);
+        self.dhs_pub = PublicKey::from(&self.dhs_priv);
+        let (rk, cks) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
+        &self.rk);
+        
+        self.rk = rk;
+        self.cks = Some(cks);
+    }
 
 }
 
@@ -125,3 +193,24 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
     (rk.try_into().unwrap(),ck.try_into().unwrap())
 }
 
+pub struct Header {
+    pub public_key: PublicKey,
+    pub pn: usize, // Previous Chain Length
+    pub n: usize, // Message Number
+}
+
+impl Header {
+
+
+    pub fn new( pkey : PublicKey, pn :usize, n: usize) -> Self {
+        Header {
+            public_key:  pkey,
+            pn: pn,
+            n : n,
+        }
+    }
+    pub fn ex_public_key_bytes(&self) -> Vec<u8> {
+        self.public_key.as_bytes().to_vec()
+    }
+
+}

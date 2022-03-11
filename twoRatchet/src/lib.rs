@@ -1,12 +1,9 @@
 
 pub mod ratchfuncs;
 pub mod encryption;
+pub mod serializer;
   
 
-pub fn hi(){
-    println!("hi there")
-}
-  
   
   /*#[cfg(test)]
 mod tests {
