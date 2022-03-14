@@ -1,4 +1,3 @@
-
 pub mod ratchfuncs;
 pub mod encryption;
 pub mod serializer;

@@ -10,55 +10,41 @@ use twoRatchet::ratchfuncs::state;
 fn main() {
 
     // handshake is finished, sk is the finished output that the two parties share
-    let mut r : StdRng = StdRng::from_entropy();
-    let sk = r.gen::<[u8;32]>();
+    let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
+
 
     // initiator goes first, initializes with the sk, and generates a keypair
 
-    let (mut i_ratchet, i_pk)  = state::init_i(sk);
+    let (mut i_ratchet, i_pk)  = state::init_i(sk,3);
 
     // now, I sends a payload with a public key in it to r, who can then initialize with i's pk and sk
 
-    let mut r_ratchet = state::init_r(sk, i_pk);
-
-    // r build some associated data, it is yet to be determined exactly what to put here
-
-    let ad = b"Associated data";
-    let message1 = b"helloword";
-    println!("responder message 1 {:?}", message1);
-    //and encrypt an initial message
-    let (header1, enc0) = r_ratchet.ratchet_encrypt(&message1.to_vec(), ad).unwrap();
-
-    // initiator is sent header and encrypted data
-
-    let message1_dec = i_ratchet.ratchet_decrypt(&header1, &enc0, ad);
-
-    // now that the first message has been decrypted, both parties are fully initalized
+    let mut r_ratchet = state::init_r(sk, i_pk,3);
 
 
-    let message2 = b"hacktheworld";
+    let message1 = b"Hello World".to_vec();                               // Data to be encrypted
+    let ad = b"Associated Data";      
 
-    println!("msg2 {:?}", message2);
+    // r makes an initial message that I can initialize with
 
-  //  println!("msg2 {:?}", message2);
+    let (header_r, encinitial) = r_ratchet.ratchet_encrypt(&message1.to_vec(), ad).unwrap();
 
-    for n in 1..4 {
-        let (header2, encrypted2) = i_ratchet.ratchet_encrypt(&b"lostmessage".to_vec(), ad).unwrap();
+    let decrypted = i_ratchet.ratchet_decrypt_i(&header_r, &encinitial, ad);
+
+
+    // now we try to send a random message:
+
+
+    for n in 1..5 {
+    let (header_r, enc0) = r_ratchet.ratchet_encrypt(&b"dojnks".to_vec(), ad).unwrap();
+    let decrypted = i_ratchet.ratchet_decrypt_i(&header_r, &enc0, ad);
+
+    // i encrypts something
+
+    let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"sboink".to_vec(), ad).unwrap();
+
+    let decrypted_1 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1,ad);
     }
-    
-    // now i wants to encrypt something
-    let (header3, encrypted3) = i_ratchet.ratchet_encrypt(&message2.to_vec(), ad).unwrap();
-    println!("_____________________________________________--");
-    let message2_dec = r_ratchet.ratchet_decrypt(&header3,&encrypted3,ad);
-
-    println!("msgdec'ed {:?}", message2_dec);
-
-  //  println!("msg2dec {:?}", message2);
-
-
-
-
-
 
 
 
