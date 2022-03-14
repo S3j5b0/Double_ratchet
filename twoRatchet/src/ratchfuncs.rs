@@ -81,13 +81,13 @@ impl state {
 
     /// Encrypt Plaintext with [Ratchet]. Returns Message [Header] and ciphertext.
     pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Option<(Header,Vec<u8>)> {
-
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
         let header = Header::new(self.dhs_pub, self.pn, self.ns);
         self.ns += 1;
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &serialize_header(&header, &ad)); // concat
 
+
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &serialize_header(&header, &ad)); // concat
         Some((header, encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
     }
 
@@ -130,11 +130,14 @@ impl state {
                         self.skip_message_keys(header.pn).unwrap();
                     }
                     self.dhratchet_i(header);
+                    
                 }
                 self.skip_message_keys(header.n).unwrap();
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
+                
                 self.ckr = Some(ckr);
                 self.nr += 1;
+
                 
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &serialize_header(&header, &ad));
                 out
@@ -156,6 +159,7 @@ impl state {
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 self.ckr = Some(ckr);
                 self.nr += 1;
+
                 
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &serialize_header(&header, &ad));
                 out
@@ -169,18 +173,22 @@ impl state {
         self.nr = 0;
         // receiving new incoming public key
         self.dhr_pub = Some(header.public_key);
+        
         let (rk, ckr) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
                                &self.rk);
-        
         self.rk = rk;
         self.ckr = Some(ckr);
+
         // making own DH ratchet, and updating sending key chain
+        if (self.dhr_counter == 0){
         self.dhs_priv = StaticSecret::new(OsRng);
         self.dhs_pub = PublicKey::from(&self.dhs_priv);
         let (rk, cks) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
-        &self.rk);
+         &self.rk);
         self.rk = rk;
         self.cks = Some(cks);
+        } 
+        self.dhr_counter = (self.dhr_counter + 1) % self.dhr_resetmax;
     }
     fn dhratchet_i(&mut self, header: &Header) {
         println!("ratch i");
@@ -191,16 +199,19 @@ impl state {
         self.dhr_pub = Some(header.public_key);
         let (rk, ckr) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
                                &self.rk);
-        
         self.rk = rk;
+        
         self.ckr = Some(ckr);
         // making own DH ratchet, and updating sending key chain
         self.dhs_priv = StaticSecret::new(OsRng);
         self.dhs_pub = PublicKey::from(&self.dhs_priv);
         let (rk, cks) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
         &self.rk);
+
         self.rk = rk;
+        
         self.cks = Some(cks);
+        
     }
 
 }

@@ -31,20 +31,41 @@ fn main() {
 
     let decrypted = i_ratchet.ratchet_decrypt_i(&header_r, &encinitial, ad);
 
+    // sending random messaages
 
     // now we try to send a random message:
+    let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"dojnks".to_vec(), ad).unwrap();
+    let decrypted = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
+    println!("???????????????????????????");
+    assert_eq!(decrypted, b"dojnks".to_vec());
 
 
-    for n in 1..5 {
     let (header_r, enc0) = r_ratchet.ratchet_encrypt(&b"dojnks".to_vec(), ad).unwrap();
+
     let decrypted = i_ratchet.ratchet_decrypt_i(&header_r, &enc0, ad);
+    assert_eq!(decrypted, b"dojnks".to_vec());
+
+
+    
+    let (bong, bing) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
+
+    let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
+
+    let decrypted0 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
+
+    assert_eq!(decrypted0, b"bonkas".to_vec());
+/*
+   
+
+
+
+
+*/
 
     // i encrypts something
 
-    let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"sboink".to_vec(), ad).unwrap();
-
-    let decrypted_1 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1,ad);
-    }
+ 
+    
 
 
 
