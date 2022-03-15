@@ -131,7 +131,7 @@ impl state {
                     }
                     self.dhratchet_i(header);
                     
-                }
+                } 
                 self.skip_message_keys(header.n).unwrap();
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 
@@ -189,6 +189,8 @@ impl state {
         self.cks = Some(cks);
         
     }
+
+
     fn dhratchet_i(&mut self, header: &Header) {
         println!("ratch i");
         self.pn = self.ns;

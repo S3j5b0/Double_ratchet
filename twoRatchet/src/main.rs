@@ -49,12 +49,19 @@ fn main() {
     
     let (bong, bing) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
 
-    for n in 1..5 {
+    for n in 1..20 {
 
     let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
 
     let decrypted0 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
     assert_eq!(decrypted0, b"bonkas".to_vec());
+
+    if n % 3 == 0{
+    let (header_r, enc2) = r_ratchet.ratchet_encrypt(&b"bos".to_vec(), ad).unwrap();
+
+    let decrypted0 = i_ratchet.ratchet_decrypt_i(&header_r, &enc2, ad);
+    assert_eq!(decrypted0, b"bos".to_vec());
+    }
     }
 
     
