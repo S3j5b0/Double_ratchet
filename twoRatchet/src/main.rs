@@ -15,11 +15,11 @@ fn main() {
 
     // initiator goes first, initializes with the sk, and generates a keypair
 
-    let (mut i_ratchet, i_pk)  = state::init_i(sk,3);
+    let (mut i_ratchet, i_pk)  = state::init_i(sk);
 
     // now, I sends a payload with a public key in it to r, who can then initialize with i's pk and sk
 
-    let mut r_ratchet = state::init_r(sk, i_pk,3);
+    let mut r_ratchet = state::init_r(sk, i_pk);
 
 
     let message1 = b"Hello World".to_vec();                               // Data to be encrypted
@@ -49,11 +49,22 @@ fn main() {
     
     let (bong, bing) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
 
+    for n in 1..20 {
+
     let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
 
     let decrypted0 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
-
     assert_eq!(decrypted0, b"bonkas".to_vec());
+
+    if n % 3 == 0{
+    let (header_r, enc2) = r_ratchet.ratchet_encrypt(&b"bos".to_vec(), ad).unwrap();
+
+    let decrypted0 = i_ratchet.ratchet_decrypt_i(&header_r, &enc2, ad);
+    assert_eq!(decrypted0, b"bos".to_vec());
+    }
+    }
+
+    
 /*
    
 

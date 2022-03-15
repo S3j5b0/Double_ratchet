@@ -15,6 +15,7 @@ pub struct state {
     is_r : bool,
     dhs_priv: StaticSecret,
     dhs_pub: PublicKey,
+
     dhr_pub: Option<PublicKey>,
     rk: [u8;32],
     cks: Option<[u8;32]>, // sending chain key
@@ -22,8 +23,7 @@ pub struct state {
     ns: usize, // sending message numbering
     nr: usize, // receiving message numbering
     pn: usize, // skipped messages from previous sending chain
-    dhr_resetmax:usize, //max value before a DHR needs to happen
-    dhr_counter:usize, // dhr counter, reset at every dhr, and 
+
     mk_skipped : HashMap<(Vec<u8>, usize), [u8; 32]>,
 
 }
@@ -32,7 +32,7 @@ impl state {
 
 
 
-    pub fn init_r(sk: [u8; 32], bob_dh_public_key: PublicKey,dh_max:usize) -> Self {
+    pub fn init_r(sk: [u8; 32], bob_dh_public_key: PublicKey) -> Self {
         let alice_priv : StaticSecret  = StaticSecret::new(OsRng);
         let alice_pub = PublicKey::from(&alice_priv);
 
@@ -43,20 +43,19 @@ impl state {
             dhs_priv : alice_priv,
             dhs_pub : alice_pub,
             dhr_pub: Some(bob_dh_public_key),
+
             rk,
             cks: Some(cks),
             ckr: None,
             ns: 0,
             nr: 0,
             pn: 0,
-            dhr_resetmax: dh_max,
-            dhr_counter : 0,
             mk_skipped: HashMap::new(),
         }
     }
 
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
-    pub fn init_i(sk: [u8; 32], dh_max: usize) -> (Self, PublicKey) {
+    pub fn init_i(sk: [u8; 32]) -> (Self, PublicKey) {
         let bob_priv : StaticSecret  = StaticSecret::new(OsRng);
         let bob_pub = PublicKey::from(&bob_priv);
 
@@ -72,8 +71,6 @@ impl state {
             ns: 0,
             nr: 0,
             pn: 0,
-            dhr_resetmax: dh_max,
-            dhr_counter : 0,
             mk_skipped: HashMap::new(),
         };
         (state,bob_pub)
@@ -90,6 +87,7 @@ impl state {
         let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &serialize_header(&header, &ad)); // concat
         Some((header, encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
     }
+
 
     fn skip_message_keys(&mut self, until: usize) -> Result<(), &str> {
         if self.nr + MAX_SKIP < until {
@@ -121,6 +119,8 @@ impl state {
     }
 
     pub fn ratchet_decrypt_i(&mut self, header: &Header, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+
+
         let plaintext = self.try_skipped_message_keys(header, ciphertext, &CONSTANT_NONCE, ad);
         match plaintext {
             Some(d) => d,
@@ -131,7 +131,7 @@ impl state {
                     }
                     self.dhratchet_i(header);
                     
-                }
+                } 
                 self.skip_message_keys(header.n).unwrap();
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 
@@ -140,6 +140,7 @@ impl state {
 
                 
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &serialize_header(&header, &ad));
+
                 out
             }
         }
@@ -180,16 +181,16 @@ impl state {
         self.ckr = Some(ckr);
 
         // making own DH ratchet, and updating sending key chain
-        if (self.dhr_counter == 0){
         self.dhs_priv = StaticSecret::new(OsRng);
         self.dhs_pub = PublicKey::from(&self.dhs_priv);
         let (rk, cks) = kdf_rk(self.dhs_priv.diffie_hellman(&self.dhr_pub.unwrap()),
          &self.rk);
         self.rk = rk;
         self.cks = Some(cks);
-        } 
-        self.dhr_counter = (self.dhr_counter + 1) % self.dhr_resetmax;
+        
     }
+
+
     fn dhratchet_i(&mut self, header: &Header) {
         println!("ratch i");
         self.pn = self.ns;
