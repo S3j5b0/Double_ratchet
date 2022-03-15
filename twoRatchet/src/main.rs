@@ -6,7 +6,9 @@ use std::thread;
 use hkdf::Hkdf;
 use rand::{rngs::StdRng, Rng,SeedableRng};
 
-use twoRatchet::ratchfuncs::state;
+use twoRatchet::ratchfuncs::{state};
+use twoRatchet::serializer::{serialize_header};
+
 fn main() {
 
     // handshake is finished, sk is the finished output that the two parties share
@@ -36,7 +38,6 @@ fn main() {
     // now we try to send a random message:
     let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"dojnks".to_vec(), ad).unwrap();
     let decrypted = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
-    println!("???????????????????????????");
     assert_eq!(decrypted, b"dojnks".to_vec());
 
 
@@ -46,7 +47,9 @@ fn main() {
     assert_eq!(decrypted, b"dojnks".to_vec());
 
 
-    
+
+
+   /* 
     let (bong, bing) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
 
     for n in 1..20 {
@@ -62,7 +65,7 @@ fn main() {
     let decrypted0 = i_ratchet.ratchet_decrypt_i(&header_r, &enc2, ad);
     assert_eq!(decrypted0, b"bos".to_vec());
     }
-    }
+    }*/
 
     
 /*

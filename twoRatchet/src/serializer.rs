@@ -10,10 +10,9 @@ use super::{
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn serialize_header(msg: &Header,ad:&[u8]) ->Vec<u8> {
+pub fn serialize_header(msg: &Header) ->Vec<u8> {
 
     let raw_msg = (
-        Bytes::new(&ad),
         msg.public_key.as_bytes().to_vec(),
         &msg.pn,
         msg.n,
