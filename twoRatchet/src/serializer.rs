@@ -10,10 +10,11 @@ use super::{
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn serialize_header(msg: &Header) ->Vec<u8> {
+pub fn serialize_header(msg: &Header, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
-        msg.public_key.as_bytes().to_vec(),
+        Bytes::new(&ad),
+        msg.DH_pub_id,
         &msg.pn,
         msg.n,
     );
@@ -21,21 +22,19 @@ pub fn serialize_header(msg: &Header) ->Vec<u8> {
     encode_sequence(raw_msg)
 }
 
-pub fn deserialize_header(msg: &[u8]) -> (Vec<u8>,Header) {
+pub fn deserialize_header(msg: &[u8],ad :Vec<u8>) -> (Vec<u8>,Header) {
     // Try to deserialize into our raw message format
     let mut temp = Vec::with_capacity(msg.len() + 1);
-    let raw_msg: (ByteBuf,ByteBuf, usize ,usize) =
+    let raw_msg: (ByteBuf, usize,usize ,usize) =
         decode_sequence(msg, 4, &mut temp);
 
 
     // On success, just move the items into the "nice" message structure
-    let mut pk_bytes = [0; 32];
     let ad = raw_msg.0.to_vec();
-    pk_bytes.copy_from_slice(&raw_msg.1.to_vec());
 
-    let pk = PublicKey::from(pk_bytes);
-    (ad, Header {
-        public_key : pk,
+
+    (ad,Header {
+        DH_pub_id: raw_msg.1,
         pn : raw_msg.2,
         n : raw_msg.3,
     })
