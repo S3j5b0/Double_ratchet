@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{serialize_header, deserialize_header}
+    serializer::{serialize_header, deserialize_header,concat, serialize_pk,deserialize_pk}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: usize = 200;
@@ -15,7 +15,6 @@ pub struct state {
     is_r : bool,
     dhs_priv: StaticSecret,
     dhs_pub: PublicKey,
-
     dhr_pub: Option<PublicKey>,
     dh_id : usize,
     pub rk: [u8;32],
@@ -26,6 +25,9 @@ pub struct state {
     pn: usize, // skipped messages from previous sending chain
 
     mk_skipped : HashMap<(usize, usize), [u8; 32]>,
+    tmp_pkey : Option<PublicKey>,
+    tmp_skey : Option<StaticSecret>,
+
 
 }
 
@@ -55,6 +57,8 @@ impl state {
             nr: 0,
             pn: 0,
             mk_skipped: HashMap::new(),
+            tmp_pkey: None,
+            tmp_skey:None,
         }
     }
 
@@ -85,29 +89,51 @@ impl state {
             nr: 0,
             pn: 0,
             mk_skipped: HashMap::new(),
+            tmp_pkey: None,
+            tmp_skey: None
         }
     }
 
+    pub fn initiate_ratch_r(&mut self)-> Vec<u8>{
+        let r_priv : StaticSecret  = StaticSecret::new(OsRng);
+        let r_pub = PublicKey::from(&r_priv);
+        let ser = serialize_pk(&r_pub.as_bytes().to_vec());
+
+        self.tmp_pkey = Some(r_pub);
+        self.tmp_skey = Some(r_priv);
+
+
+        r_pub.as_bytes().to_vec()
+
+    }
+
     /// Encrypt Plaintext with [Ratchet]. Returns Message [Header] and ciphertext.
-    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Option<(Header,Vec<u8>)> {
+    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Option<(Vec<u8>,Vec<u8>)> {
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
         let header = Header::new( self.pn, self.ns,self.dh_id);
         self.ns += 1;
 
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(&header, &ad)); // concat
 
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &serialize_header(&header, &ad)); // concat
-        Some((header, encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
+ 
+        Some((serialize_header(&header), encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
     }
 
 
-    pub fn ratchet_decrypt_i(&mut self, header: &Header, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+    pub fn ratchet_decrypt_r(&mut self, header: &Vec<u8>, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+        let header = match deserialize_header(header) {
+            Some(x) => x,
+            None => return [1,2,34].to_vec(),
+        };
 
-
-        let plaintext = self.try_skipped_message_keys(header, ciphertext, &CONSTANT_NONCE, ad);
+        let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
         match plaintext {
             Some(d) => d,
             None => {
+
+                self.skip_message_keys(header.n - self.nr);
+                
   
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 
@@ -115,7 +141,32 @@ impl state {
                 self.nr += 1;
 
                 
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &serialize_header(&header, &ad));
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(&header, &ad));
+
+                out
+            }
+        }
+    }
+    pub fn ratchet_decrypt_i(&mut self, header: &Vec<u8>, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+
+        let header = match deserialize_header(header) {
+            Some(x) => x,
+            None => return [1,2,34].to_vec(),
+        };
+        let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
+        match plaintext {
+            Some(d) => d,
+            None => {
+ 
+                self.skip_message_keys(header.n - self.nr);
+                
+                let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
+                
+                self.ckr = Some(ckr);
+                self.nr += 1;
+
+                
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(&header, &ad));
 
                 out
             }
@@ -129,6 +180,7 @@ impl state {
         match self.ckr {
             Some(d) => {
                 while self.nr  < until {
+                    
                     let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                     self.ckr = Some(ckr);
                     self.mk_skipped.insert((self.dh_id, self.nr), mk);
@@ -145,7 +197,7 @@ impl state {
             let mk = *self.mk_skipped.get(&(header.DH_pub_id, header.n))
                 .unwrap();
             self.mk_skipped.remove(&(header.DH_pub_id, header.n)).unwrap();
-            Some(decrypt(&mk[..16], ciphertext, &serialize_header(&header, &ad), nonce))
+            Some(decrypt(&mk[..16], nonce,ciphertext, &concat(&header, &ad)))
         } else {
             None
         }

@@ -1,13 +1,8 @@
 use x25519_dalek_ng::{PublicKey,StaticSecret, SharedSecret};
 
 use rand_core::{OsRng,};
-use std::sync::mpsc;
-use std::thread;
-use hkdf::Hkdf;
-use rand::{rngs::StdRng, Rng,SeedableRng};
 
 use twoRatchet::ratchfuncs::{state};
-use twoRatchet::serializer::{serialize_header};
 
 fn main() {
 
@@ -28,33 +23,44 @@ fn main() {
 
     let mut r_ratchet = state::init_r(sk, r_priv,r_pub, &i_pub.as_bytes().to_vec());
 
+    
 
+    let (header_i_lost, enclost) = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i).unwrap();
+    let declost = r_ratchet.ratchet_decrypt_r(&header_i_lost, &enclost, ad_i);
 
-
+    
+for _ in 1..5 {
     let (header_i, enc0) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad_i).unwrap();
 
 
-    let dec0 = r_ratchet.ratchet_decrypt_i(&header_i,&enc0,ad_i);
+    let dec0 = r_ratchet.ratchet_decrypt_r(&header_i,&enc0,ad_i);
 
     assert_eq!(dec0, b"bonkas".to_vec());
 
-   /* 
-    let (bong, bing) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
+    let (header_r, enc_r) = r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r).unwrap();
 
-    for n in 1..20 {
+    let deci = i_ratchet.ratchet_decrypt_i(&header_r, &enc_r,ad_r);
 
-    let (header_i, enc1) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad).unwrap();
+    assert_eq!(deci, b"downlink".to_vec());
+}
+let (header_r, enc_l) = r_ratchet.ratchet_encrypt(&b"error".to_vec(), ad_r).unwrap();
 
-    let decrypted0 = r_ratchet.ratchet_decrypt_r(&header_i, &enc1, ad);
-    assert_eq!(decrypted0, b"bonkas".to_vec());
+//let header_r = &[1,2,3,23,32].to_vec();
 
-    if n % 3 == 0{
-    let (header_r, enc2) = r_ratchet.ratchet_encrypt(&b"bos".to_vec(), ad).unwrap();
+let deci = i_ratchet.ratchet_decrypt_i(&header_r, &enc_l,ad_r);
 
-    let decrypted0 = i_ratchet.ratchet_decrypt_i(&header_r, &enc2, ad);
-    assert_eq!(decrypted0, b"bos".to_vec());
-    }
-    }*/
+
+
+
+let new_pk = r_ratchet.initiate_ratch_r();
+
+
+// now r will send this pk to I
+
+
+    
+
+
 
     
 /*
