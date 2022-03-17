@@ -14,7 +14,7 @@ pub fn concat(msg: &Header, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
         Bytes::new(&ad),
-        msg.DH_pub_id,
+        msg.dh_pub_id,
         &msg.pn,
         msg.n,
     );
@@ -45,7 +45,7 @@ pub fn deserialize_pk(serial_pk: &[u8]) ->Vec<u8> {
 pub fn serialize_header(msg: &Header) ->Vec<u8> {
 
     let raw_msg = (
-        msg.DH_pub_id,
+        msg.dh_pub_id,
         &msg.pn,
         msg.n,
     );
@@ -64,7 +64,7 @@ pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
         return None
     } else {
        return  Some(Header {
-            DH_pub_id: raw_msg.unwrap().0,
+            dh_pub_id: raw_msg.unwrap().0,
             pn : raw_msg.unwrap().1,
             n : raw_msg.unwrap().2,
         })

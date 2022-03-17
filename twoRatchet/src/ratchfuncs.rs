@@ -255,10 +255,10 @@ impl state {
     }
 
     fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8; 13], ad: &[u8]) -> Option<Vec<u8>> {
-        if self.mk_skipped.contains_key(&(header.DH_pub_id, header.n)) {
-            let mk = *self.mk_skipped.get(&(header.DH_pub_id, header.n))
+        if self.mk_skipped.contains_key(&(header.dh_pub_id, header.n)) {
+            let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
                 .unwrap();
-            self.mk_skipped.remove(&(header.DH_pub_id, header.n)).unwrap();
+            self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
             Some(decrypt(&mk[..16], nonce,ciphertext, &concat(&header, &ad)))
         } else {
             None
@@ -291,11 +291,7 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
     let mut output = [0u8; 64];
     // kdf_ck should have a constant 
     let salt = &[1;32];
-
-
     let h = Hkdf::<Sha256>::new(Some(salt),input);
-
-
     let info = b"Whispertext";
 
     h.expand(info, &mut output).unwrap();
@@ -308,17 +304,17 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
 pub struct Header {
     pub pn: usize, // Previous Chain Length
     pub n: usize, // Message Number
-    pub DH_pub_id:usize,
+    pub dh_pub_id:usize,
 }
 
 impl Header {
 
 
-    pub fn new( pn :usize, n: usize, DH_pub_id: usize) -> Self {
+    pub fn new( pn :usize, n: usize, dh_pub_id: usize) -> Self {
         Header {
             pn: pn,
             n : n,
-            DH_pub_id: DH_pub_id,
+            dh_pub_id: dh_pub_id,
         }
     }
 
