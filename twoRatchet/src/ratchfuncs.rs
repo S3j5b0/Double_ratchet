@@ -172,7 +172,7 @@ impl state {
         let header = Header::new( self.pn, self.ns,self.dh_id);
         self.ns += 1;
 
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(&header, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(header.dh_pub_id, header.pn,header.n, &ad)); // concat
 
  
         Some((serialize_header(&header), encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
@@ -201,7 +201,7 @@ impl state {
                 self.nr += 1;
 
                 
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(&header, &ad));
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
                 out
             }
@@ -228,7 +228,7 @@ impl state {
                 self.nr += 1;
 
                 
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(&header, &ad));
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
                 out
             }
@@ -259,7 +259,7 @@ impl state {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
-            Some(decrypt(&mk[..16], nonce,ciphertext, &concat(&header, &ad)))
+            Some(decrypt(&mk[..16], nonce,ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad)))
         } else {
             None
         }

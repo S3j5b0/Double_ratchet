@@ -10,13 +10,13 @@ use super::{
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn concat(msg: &Header, ad:&[u8]) ->Vec<u8> {
+pub fn concat(dh_id: usize, pn : usize, n: usize, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
         Bytes::new(&ad),
-        msg.dh_pub_id,
-        &msg.pn,
-        msg.n,
+        dh_id,
+        pn,
+        n,
     );
 
     encode_sequence(raw_msg)
