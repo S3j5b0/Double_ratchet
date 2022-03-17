@@ -30,11 +30,8 @@ fn main() {
     
 
     let header_i_lost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-    let declost = r_ratchet.ratchet_decrypt_r(&header_i_lost, ad_i);
 
-
-    assert_eq!(declost, b"lost".to_vec());
-
+    let header_r_lost = r_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_r);
     
 for _ in 1..5 {
     let header_i = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad_i);
@@ -55,17 +52,20 @@ for _ in 1..5 {
 
 
 
-/*
 let new_pk = r_ratchet.initiate_ratch_r();
 
-// i receives 
-
-let i_pk = i_ratchet.ratchet_decrypt_i(&new_pk, &[0], ad_r);
+// i receives this new key, and sends back 
 
 
-let _ = r_ratchet.ratchet_decrypt_r(&i_pk, &[0], ad_i);
+let i_pk = i_ratchet.ratchet_decrypt_i(&new_pk, ad_r);
+
+ // i sends this pk to r 
 
 
+let declost = r_ratchet.ratchet_decrypt_r(&new_pk, ad_r);
+
+
+/*
 
 // now r will send this pk to I
 
@@ -75,45 +75,4 @@ let _ = r_ratchet.ratchet_decrypt_r(&i_pk, &[0], ad_i);
 
 
     
-/*
-   
-
-
-
-
-*/
-
-    // i encrypts something
-
- 
-    
-
-
-
-
-
-
-    /*
-    let alice_priv : StaticSecret  = StaticSecret::new(OsRng);
-    let alice_pub = PublicKey::from(&alice_priv);
-
-    
-    
-
-
-
-    let bob_priv : StaticSecret  = StaticSecret::new(OsRng);
-    let bob_pub = PublicKey::from(&bob_priv);
-
-
-    let alice_DH_0_=  alice_priv.diffie_hellman(&bob_pub);
-
-
-    let bob_DH_0 =  bob_priv.diffie_hellman(&alice_pub);
-
-
-    let rk : [u8;32] = [82, 233, 86, 68, 105, 127, 137, 40, 235, 132, 64, 239, 132, 180, 52, 191, 55, 16, 253, 220, 86, 48, 67, 131, 224, 215, 186, 129, 195, 200, 194, 133];
-
-
-*/
 }

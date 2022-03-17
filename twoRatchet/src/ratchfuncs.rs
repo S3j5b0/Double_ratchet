@@ -12,18 +12,16 @@ use super::{
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: usize = 200;
 pub struct state {
-    is_r : bool,
     dhs_priv: StaticSecret,
     dhs_pub: PublicKey,
     dhr_pub: Option<PublicKey>,
-    dh_id : usize,
+    pub dh_id : usize,
     pub rk: [u8;32],
     pub cks: Option<[u8;32]>, // sending chain key
     pub ckr: Option<[u8;32]>, // receiving chain key
     ns: usize, // sending message numbering
     nr: usize, // receiving message numbering
     pn: usize, // skipped messages from previous sending chain
-
     mk_skipped : HashMap<(usize, usize), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
@@ -45,7 +43,6 @@ impl state {
         let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key),
         &rk);
         state {
-            is_r : true, 
             dhs_priv : r_dh_privkey,
             dhs_pub : r_dh_public_key,
             dhr_pub: Some(i_dh_public_key),
@@ -78,7 +75,6 @@ impl state {
         &rk);
 
         state {
-            is_r : true, 
             dhs_priv : i_dh_privkey,
             dhs_pub : i_dh_public_key,
             dhr_pub: Some(r_dh_public_key),
@@ -107,7 +103,7 @@ impl state {
         let r_dh_public_key = PublicKey::from(r_dh_public_key);
         let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
         let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
-
+        
         self.dhs_priv = i_dh_privkey;
         self.dhs_pub = i_dh_public_key;
         self.dhr_pub =  Some(r_dh_public_key);
@@ -160,6 +156,8 @@ impl state {
         self.tmp_skey = Some(r_priv);
 
 
+
+
         ser
 
     }
@@ -168,8 +166,7 @@ impl state {
     pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
-        
-
+    
 
         let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(self.dh_id, self.pn,self.ns, &ad)); // concat
 
@@ -191,7 +188,9 @@ impl state {
         match plaintext {
             Some(d) => d,
             None => {
-                self.skip_message_keys(header.n - self.nr);
+            //    println!("header {}", header.dh_pub_id);
+            //    println!("self id {}", self.dh_id);
+                self.skip_message_keys(header.n);
                 
   
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
@@ -225,7 +224,7 @@ impl state {
             Some(d) => d,
             None => {
  
-                self.skip_message_keys(header.n - self.nr);
+                self.skip_message_keys(header.n);
                 
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 
@@ -285,7 +284,6 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
     let mut output = [0u8; 64];
     let salt = salt.as_bytes();
 
-
     let h = Hkdf::<Sha256>::new(Some(salt),input);
 
 
@@ -334,6 +332,23 @@ impl Header {
 
 }
 
+pub struct DhPayload {
+    pub pk: PublicKey, // public key that is sent
+    pub nonce : usize, // DHRAckNonce, or DHRResNonce
+}
+impl DhPayload {
+
+
+    pub fn new( pk : PublicKey, nonce : usize) -> Self {
+        DhPayload {
+            pk: pk,
+            nonce: nonce,
+        }
+    }
+
+
+
+    }
 /*
 #[cfg(test)]
 mod tests {
