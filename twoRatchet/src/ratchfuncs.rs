@@ -107,8 +107,7 @@ impl state {
         let r_dh_public_key = PublicKey::from(r_dh_public_key);
         let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
         let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
-        println!("i ckr {:?}", ckr);
-        println!("i cks {:?}", cks);
+
         self.dhs_priv = i_dh_privkey;
         self.dhs_pub = i_dh_public_key;
         self.dhr_pub =  Some(r_dh_public_key);
@@ -166,32 +165,32 @@ impl state {
     }
 
     /// Encrypt Plaintext with [Ratchet]. Returns Message [Header] and ciphertext.
-    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Option<(Vec<u8>,Vec<u8>)> {
+    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
-        let header = Header::new( self.pn, self.ns,self.dh_id);
+        
+
+
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(self.dh_id, self.pn,self.ns, &ad)); // concat
+
+        let header = Header::new( self.pn, self.ns,self.dh_id,encrypted_data.clone());
         self.ns += 1;
-
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(header.dh_pub_id, header.pn,header.n, &ad)); // concat
-
- 
-        Some((serialize_header(&header), encrypted_data)) // leaving out nonce, since it is a constant, as described bysignal docs
+        serialize_header(&header) // leaving out nonce, since it is a constant, as described bysignal docs
     }
 
 
-    pub fn ratchet_decrypt_r(&mut self, header: &Vec<u8>, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+    pub fn ratchet_decrypt_r(&mut self, header: &Vec<u8>,  ad: &[u8]) -> Vec<u8> {
         let header = match deserialize_header(header) {
             Some(x) => x,
             None => {
                 let outkey = self.ratchet_r(&deserialize_pk(header));
                 return [1,2,34].to_vec()},
-        };
-
-        let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
+    };
+   // let ciphertext = header.ciphertext;
+        let plaintext = self.try_skipped_message_keys(&header, &header.ciphertext, &CONSTANT_NONCE, ad);
         match plaintext {
             Some(d) => d,
             None => {
-
                 self.skip_message_keys(header.n - self.nr);
                 
   
@@ -199,15 +198,14 @@ impl state {
                 
                 self.ckr = Some(ckr);
                 self.nr += 1;
-
-                
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
+ 
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, &header.ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
                 out
             }
         }
     }
-    pub fn ratchet_decrypt_i(&mut self, header: &Vec<u8>, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
+    pub fn ratchet_decrypt_i(&mut self, header: &Vec<u8>, ad: &[u8]) -> Vec<u8> {
 
         let header = match deserialize_header(header) {
             Some(x) => x,
@@ -215,7 +213,7 @@ impl state {
                 let outkey = self.ratchet_i(&deserialize_pk(header));
                 return outkey},
         };
-        let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
+        let plaintext = self.try_skipped_message_keys(&header, &header.ciphertext, &CONSTANT_NONCE, ad);
         match plaintext {
             Some(d) => d,
             None => {
@@ -228,7 +226,7 @@ impl state {
                 self.nr += 1;
 
                 
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, &header.ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
                 out
             }
@@ -305,16 +303,18 @@ pub struct Header {
     pub pn: usize, // Previous Chain Length
     pub n: usize, // Message Number
     pub dh_pub_id:usize,
+    pub ciphertext : Vec<u8>,
 }
 
 impl Header {
 
 
-    pub fn new( pn :usize, n: usize, dh_pub_id: usize) -> Self {
+    pub fn new( pn :usize, n: usize, dh_pub_id: usize, cipher: Vec<u8>) -> Self {
         Header {
             pn: pn,
             n : n,
             dh_pub_id: dh_pub_id,
+            ciphertext: cipher,
         }
     }
 

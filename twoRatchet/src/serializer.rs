@@ -48,6 +48,7 @@ pub fn serialize_header(msg: &Header) ->Vec<u8> {
         msg.dh_pub_id,
         &msg.pn,
         msg.n,
+        Bytes::new(&msg.ciphertext)
     );
 
     encode_sequence(raw_msg)
@@ -56,17 +57,19 @@ pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
     // Try to deserialize into our raw message format
     let mut temp = Vec::with_capacity(serial_header.len() + 1);
 
-    let raw_msg :Option<( usize,usize ,usize)>=  decode_sequence(serial_header, 3, &mut temp);
+    let raw_msg :Option<( usize,usize ,usize, ByteBuf)>=  decode_sequence(serial_header, 4, &mut temp);
 
 
     // On success, just move the items into the "nice" message structure
     if raw_msg == None{
         return None
     } else {
+        let raw = raw_msg.clone().unwrap();
        return  Some(Header {
-            dh_pub_id: raw_msg.unwrap().0,
-            pn : raw_msg.unwrap().1,
-            n : raw_msg.unwrap().2,
+            dh_pub_id: raw.0,
+            pn : raw.1,
+            n : raw.2,
+            ciphertext: raw.3.to_vec()
         })
     }
 

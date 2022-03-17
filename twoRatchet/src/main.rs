@@ -6,8 +6,10 @@ use twoRatchet::ratchfuncs::{state};
 
 fn main() {
     //// TODO:
-    /// include ciphertext in header
     /// make error handling for aead decrpyiton
+
+
+
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
     let ad_r = &[1];
@@ -27,33 +29,33 @@ fn main() {
 
     
 
-    let (header_i_lost, enclost) = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i).unwrap();
-    let declost = r_ratchet.ratchet_decrypt_r(&header_i_lost, &enclost, ad_i);
+    let header_i_lost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
+    let declost = r_ratchet.ratchet_decrypt_r(&header_i_lost, ad_i);
+
+
+    assert_eq!(declost, b"lost".to_vec());
 
     
 for _ in 1..5 {
-    let (header_i, enc0) = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad_i).unwrap();
+    let header_i = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad_i);
 
 
-    let dec0 = r_ratchet.ratchet_decrypt_r(&header_i,&enc0,ad_i);
+    let dec0 = r_ratchet.ratchet_decrypt_r(&header_i,ad_i);
 
     assert_eq!(dec0, b"bonkas".to_vec());
 
-    let (header_r, enc_r) = r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r).unwrap();
+    let header_r= r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r);
 
-    let deci = i_ratchet.ratchet_decrypt_i(&header_r, &enc_r,ad_r);
+    let deci = i_ratchet.ratchet_decrypt_i(&header_r,ad_r);
 
     assert_eq!(deci, b"downlink".to_vec());
 }
-let (header_r, enc_l) = r_ratchet.ratchet_encrypt(&b"error".to_vec(), ad_r).unwrap();
-
-//let header_r = &[1,2,3,23,32].to_vec();
-
-let deci = i_ratchet.ratchet_decrypt_i(&header_r, &enc_l,ad_r);
 
 
 
 
+
+/*
 let new_pk = r_ratchet.initiate_ratch_r();
 
 // i receives 
@@ -64,15 +66,10 @@ let i_pk = i_ratchet.ratchet_decrypt_i(&new_pk, &[0], ad_r);
 let _ = r_ratchet.ratchet_decrypt_r(&i_pk, &[0], ad_i);
 
 
-let (header_r, enc_r) = r_ratchet.ratchet_encrypt(&b"newhcain".to_vec(), ad_r).unwrap();
-
-let dec = i_ratchet.ratchet_decrypt_i(&header_r, &enc_r,ad_r);
-
-assert_eq!(b"newhcain".to_vec(), dec);
 
 // now r will send this pk to I
 
-
+*/
     
 
 
