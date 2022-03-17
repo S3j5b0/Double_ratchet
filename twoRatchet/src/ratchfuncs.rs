@@ -201,7 +201,14 @@ impl state {
  
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, &header.ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
-                out
+                
+                match out {
+                    Some(x) => {
+                        return x
+                    },
+                    None =>{ 
+                        return [0].to_vec()
+                    }};
             }
         }
     }
@@ -228,7 +235,13 @@ impl state {
                 
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, &header.ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad));
 
-                out
+                match out {
+                    Some(x) => {
+                        return x
+                    },
+                    None =>{ 
+                        return [0].to_vec()
+                    }};
             }
         }
     }
@@ -257,7 +270,7 @@ impl state {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
-            Some(decrypt(&mk[..16], nonce,ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad)))
+            decrypt(&mk[..16], nonce,ciphertext, &concat(header.dh_pub_id, header.pn,header.n, &ad))
         } else {
             None
         }

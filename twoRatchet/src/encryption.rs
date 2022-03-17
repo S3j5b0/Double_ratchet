@@ -39,15 +39,8 @@ pub fn decrypt(
     nonce: &[u8],
     ciphertext: &[u8],
     ad: &[u8],
-) -> Vec<u8> {
-  /*  println!("///////////////////////////////////////77");
-    println!("dec ciphertex {:?}",ciphertext );
-    println!("dec mk: {:?}", key);
-    println!("decnonce : {:?}", nonce);
-    println!("decad: {:?}", ad);
-    
-    
-    println!("cip: {:?}", ciphertext);*/
+) -> Option<Vec<u8>> {
+
     // Initialize CCM mode
     let ccm: Ccm<Aes128, U8, U13> = Ccm::new(GenericArray::from_slice(key));
     // Verify tag, if correct then decrypt and place plaintext in dst_out_pt
@@ -57,7 +50,13 @@ pub fn decrypt(
             aad: ad,
             msg: ciphertext,
         },
-    ).expect("failed to do aead decrpytion");
+    ).unwrap_or([44].to_vec());
+
+    if dst_out_pt != [44].to_vec() {
    
-    dst_out_pt
+    Some(dst_out_pt)
+}
+    else{
+    None
+    }
 }
