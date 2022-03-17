@@ -5,7 +5,9 @@ use rand_core::{OsRng,};
 use twoRatchet::ratchfuncs::{state};
 
 fn main() {
-
+    //// TODO:
+    /// include ciphertext in header
+    /// make error handling for aead decrpyiton
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
     let ad_r = &[1];
@@ -54,6 +56,19 @@ let deci = i_ratchet.ratchet_decrypt_i(&header_r, &enc_l,ad_r);
 
 let new_pk = r_ratchet.initiate_ratch_r();
 
+// i receives 
+
+let i_pk = i_ratchet.ratchet_decrypt_i(&new_pk, &[0], ad_r);
+
+
+let _ = r_ratchet.ratchet_decrypt_r(&i_pk, &[0], ad_i);
+
+
+let (header_r, enc_r) = r_ratchet.ratchet_encrypt(&b"newhcain".to_vec(), ad_r).unwrap();
+
+let dec = i_ratchet.ratchet_decrypt_i(&header_r, &enc_r,ad_r);
+
+assert_eq!(b"newhcain".to_vec(), dec);
 
 // now r will send this pk to I
 

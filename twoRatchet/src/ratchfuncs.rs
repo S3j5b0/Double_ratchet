@@ -18,8 +18,8 @@ pub struct state {
     dhr_pub: Option<PublicKey>,
     dh_id : usize,
     pub rk: [u8;32],
-    cks: Option<[u8;32]>, // sending chain key
-    ckr: Option<[u8;32]>, // receiving chain key
+    pub cks: Option<[u8;32]>, // sending chain key
+    pub ckr: Option<[u8;32]>, // receiving chain key
     ns: usize, // sending message numbering
     nr: usize, // receiving message numbering
     pn: usize, // skipped messages from previous sending chain
@@ -76,6 +76,7 @@ impl state {
         &sk);
         let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),
         &rk);
+
         state {
             is_r : true, 
             dhs_priv : i_dh_privkey,
@@ -94,6 +95,63 @@ impl state {
         }
     }
 
+    pub fn ratchet_i(&mut self, r_dh_public_key:&[u8]) -> Vec<u8> {
+
+        let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
+        let i_dh_public_key = PublicKey::from(&i_dh_privkey);
+
+        let mut buf = [0; 32];
+        buf.copy_from_slice(&r_dh_public_key[..32]);
+        let r_dh_public_key = x25519_dalek_ng::PublicKey::from(buf);
+
+        let r_dh_public_key = PublicKey::from(r_dh_public_key);
+        let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
+        let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
+        println!("i ckr {:?}", ckr);
+        println!("i cks {:?}", cks);
+        self.dhs_priv = i_dh_privkey;
+        self.dhs_pub = i_dh_public_key;
+        self.dhr_pub =  Some(r_dh_public_key);
+        self.dh_id = self.dh_id +1;
+        self.rk = rk;
+        self.cks =  Some(cks);
+        self.ckr =  Some(ckr);
+        self.ns= 0;
+        self.nr= 0;
+        self.pn= 0;
+        self.mk_skipped =  HashMap::new();
+        serialize_pk(&i_dh_public_key.as_bytes().to_vec())
+        
+    }
+
+    pub fn ratchet_r(&mut self, i_dh_public_key:&[u8]) -> Vec<u8> {
+
+        let r_dh_privkey : StaticSecret  = self.tmp_skey.clone().unwrap();
+        let r_dh_public_key = self.tmp_pkey.unwrap();
+
+        let mut buf = [0; 32];
+        buf.copy_from_slice(&i_dh_public_key[..32]);
+        let i_dh_public_key = x25519_dalek_ng::PublicKey::from(buf);
+
+        let r_dh_public_key = PublicKey::from(r_dh_public_key);
+        let (rk, cks) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key), &self.rk);
+        let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key),&rk);
+
+        self.dhs_priv = r_dh_privkey;
+        self.dhs_pub = i_dh_public_key;
+        self.dhr_pub =  Some(r_dh_public_key);
+        self.dh_id = self.dh_id +1;
+        self.rk = rk;
+        self.cks =  Some(cks);
+        self.ckr =  Some(ckr);
+        self.ns= 0;
+        self.nr= 0;
+        self.pn= 0;
+        self.mk_skipped =  HashMap::new();
+        serialize_pk(&r_dh_public_key.as_bytes().to_vec())
+        
+    }
+
     pub fn initiate_ratch_r(&mut self)-> Vec<u8>{
         let r_priv : StaticSecret  = StaticSecret::new(OsRng);
         let r_pub = PublicKey::from(&r_priv);
@@ -103,7 +161,7 @@ impl state {
         self.tmp_skey = Some(r_priv);
 
 
-        r_pub.as_bytes().to_vec()
+        ser
 
     }
 
@@ -124,7 +182,9 @@ impl state {
     pub fn ratchet_decrypt_r(&mut self, header: &Vec<u8>, ciphertext: &[u8],  ad: &[u8]) -> Vec<u8> {
         let header = match deserialize_header(header) {
             Some(x) => x,
-            None => return [1,2,34].to_vec(),
+            None => {
+                let outkey = self.ratchet_r(&deserialize_pk(header));
+                return [1,2,34].to_vec()},
         };
 
         let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
@@ -151,7 +211,9 @@ impl state {
 
         let header = match deserialize_header(header) {
             Some(x) => x,
-            None => return [1,2,34].to_vec(),
+            None => {
+                let outkey = self.ratchet_i(&deserialize_pk(header));
+                return outkey},
         };
         let plaintext = self.try_skipped_message_keys(&header, ciphertext, &CONSTANT_NONCE, ad);
         match plaintext {
@@ -208,6 +270,7 @@ impl state {
 
 
 fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
+    
     let mut output = [0u8; 64];
     let salt = salt.as_bytes();
 
