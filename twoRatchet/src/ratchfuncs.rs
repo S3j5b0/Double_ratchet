@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{serialize_header, deserialize_header,concat, serialize_pk,deserialize_pk}
+    serializer::{serialize_header, deserialize_header,concat, serialize_pk,deserialize_pk,serialize_dhr,deserialize_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: usize = 200;
@@ -25,6 +25,8 @@ pub struct state {
     mk_skipped : HashMap<(usize, usize), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
+    dhr_ack_nonce : u16,
+    dhr_res_nonce : u16,
 
 
 }
@@ -56,6 +58,8 @@ impl state {
             mk_skipped: HashMap::new(),
             tmp_pkey: None,
             tmp_skey:None,
+            dhr_ack_nonce : 0,
+            dhr_res_nonce : 0,
         }
     }
 
@@ -87,11 +91,15 @@ impl state {
             pn: 0,
             mk_skipped: HashMap::new(),
             tmp_pkey: None,
-            tmp_skey: None
+            tmp_skey: None,
+            dhr_ack_nonce: 0,
+            dhr_res_nonce: 0,
         }
     }
 
-    pub fn ratchet_i(&mut self, r_dh_public_key:&[u8]) -> Vec<u8> {
+    pub fn ratchet_i(&mut self, dhr_req:DhPayload) -> Vec<u8> {
+
+        let r_dh_public_key = dhr_req.pk;
 
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
@@ -104,6 +112,8 @@ impl state {
         let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
         let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
         
+        self.dhr_res_nonce = dhr_req.nonce;
+        self.dhr_ack_nonce += self.dhr_ack_nonce;
         self.dhs_priv = i_dh_privkey;
         self.dhs_pub = i_dh_public_key;
         self.dhr_pub =  Some(r_dh_public_key);
@@ -115,12 +125,19 @@ impl state {
         self.nr= 0;
         self.pn= 0;
         self.mk_skipped =  HashMap::new();
-        serialize_pk(&i_dh_public_key.as_bytes().to_vec())
+
+        // return the key
+
+        let dhr_ack_payload = DhPayload {
+            pk : i_dh_public_key.as_bytes().to_vec(),
+            nonce :self.dhr_ack_nonce,
+        };
+        serialize_dhr(dhr_ack_payload)
         
     }
 
-    pub fn ratchet_r(&mut self, i_dh_public_key:&[u8]) -> Vec<u8> {
-
+    pub fn ratchet_r(&mut self, dhr_ack:DhPayload)  {
+        let i_dh_public_key = dhr_ack.pk;
         let r_dh_privkey : StaticSecret  = self.tmp_skey.clone().unwrap();
         let r_dh_public_key = self.tmp_pkey.unwrap();
 
@@ -132,6 +149,9 @@ impl state {
         let (rk, cks) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key), &self.rk);
         let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key),&rk);
 
+
+        self.dhr_ack_nonce = dhr_ack.nonce;
+        self.dhr_res_nonce += self.dhr_res_nonce;
         self.dhs_priv = r_dh_privkey;
         self.dhs_pub = i_dh_public_key;
         self.dhr_pub =  Some(r_dh_public_key);
@@ -143,19 +163,21 @@ impl state {
         self.nr= 0;
         self.pn= 0;
         self.mk_skipped =  HashMap::new();
-        serialize_pk(&r_dh_public_key.as_bytes().to_vec())
         
     }
 
     pub fn initiate_ratch_r(&mut self)-> Vec<u8>{
         let r_priv : StaticSecret  = StaticSecret::new(OsRng);
         let r_pub = PublicKey::from(&r_priv);
-        let ser = serialize_pk(&r_pub.as_bytes().to_vec());
+        let dhrpayload = DhPayload {
+            pk : r_pub.as_bytes().to_vec(),
+            nonce: self.dhr_res_nonce,
+        };
+        let ser = serialize_dhr(dhrpayload);
 
         self.tmp_pkey = Some(r_pub);
         self.tmp_skey = Some(r_priv);
-
-
+        self.dhr_res_nonce += 1;
 
 
         ser
@@ -180,7 +202,7 @@ impl state {
         let header = match deserialize_header(header) {
             Some(x) => x,
             None => {
-                let outkey = self.ratchet_r(&deserialize_pk(header));
+                self.ratchet_r(deserialize_dhr(header));
                 return [1,2,34].to_vec()},
     };
    // let ciphertext = header.ciphertext;
@@ -188,8 +210,7 @@ impl state {
         match plaintext {
             Some(d) => d,
             None => {
-            //    println!("header {}", header.dh_pub_id);
-            //    println!("self id {}", self.dh_id);
+
                 self.skip_message_keys(header.n);
                 
   
@@ -216,7 +237,7 @@ impl state {
         let header = match deserialize_header(header) {
             Some(x) => x,
             None => {
-                let outkey = self.ratchet_i(&deserialize_pk(header));
+                let outkey = self.ratchet_i(deserialize_dhr(header));
                 return outkey},
         };
         let plaintext = self.try_skipped_message_keys(&header, &header.ciphertext, &CONSTANT_NONCE, ad);
@@ -333,13 +354,13 @@ impl Header {
 }
 
 pub struct DhPayload {
-    pub pk: PublicKey, // public key that is sent
-    pub nonce : usize, // DHRAckNonce, or DHRResNonce
+    pub pk: Vec<u8>, // public key that is sent
+    pub nonce : u16, // DHRAckNonce, or DHRResNonce
 }
 impl DhPayload {
 
 
-    pub fn new( pk : PublicKey, nonce : usize) -> Self {
+    pub fn new( pk : Vec<u8>, nonce : u16) -> Self {
         DhPayload {
             pk: pk,
             nonce: nonce,

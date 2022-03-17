@@ -6,7 +6,7 @@ use serde_bytes::{ByteBuf, Bytes};
 use x25519_dalek_ng::{self, PublicKey};
 
 use super::{
-    ratchfuncs::{Header}
+    ratchfuncs::{Header,DhPayload }
 };
 use serde::Serialize; 
 /// Concat header with associated data
@@ -21,13 +21,35 @@ pub fn concat(dh_id: usize, pn : usize, n: usize, ad:&[u8]) ->Vec<u8> {
 
     encode_sequence(raw_msg)
 }
+pub fn serialize_dhr(dh: DhPayload) ->Vec<u8> {
+    let tmp : usize = 1;
+    let raw_msg = (
+        Bytes::new(&dh.pk),
+        dh.nonce,
+    );
+    encode_sequence(raw_msg)
+}
+pub fn deserialize_dhr(serial_pk: &[u8]) ->DhPayload{
 
+
+    let mut temp = Vec::with_capacity(serial_pk.len() );
+
+    let raw_pk :  (ByteBuf,u16)=  decode_sequence(serial_pk, 2, &mut temp).unwrap();
+
+
+    
+
+    DhPayload {
+        pk:raw_pk.0.to_vec(),
+        nonce:raw_pk.1,
+    }
+    
+}
 pub fn serialize_pk(pk: &Vec<u8>) ->Vec<u8> {
     let tmp : usize = 1;
     let raw_msg = (
         Bytes::new(&pk),
         tmp,
-
     );
     encode_sequence(raw_msg)
 }
