@@ -10,12 +10,11 @@ use super::{
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn concat(dh_id: usize, pn : usize, n: usize, ad:&[u8]) ->Vec<u8> {
+pub fn concat(dh_id: usize,  n: usize, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
         Bytes::new(&ad),
         dh_id,
-        pn,
         n,
     );
 
@@ -68,7 +67,6 @@ pub fn serialize_header(msg: &Header) ->Vec<u8> {
 
     let raw_msg = (
         msg.dh_pub_id,
-        &msg.pn,
         msg.n,
         Bytes::new(&msg.ciphertext)
     );
@@ -79,8 +77,7 @@ pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
     // Try to deserialize into our raw message format
     let mut temp = Vec::with_capacity(serial_header.len() + 1);
 
-    let raw_msg :Option<( usize,usize ,usize, ByteBuf)>=  decode_sequence(serial_header, 4, &mut temp);
-
+    let raw_msg :Option<( usize ,usize, ByteBuf)>=  decode_sequence(serial_header, 3, &mut temp);
 
     // On success, just move the items into the "nice" message structure
     if raw_msg == None{
@@ -89,9 +86,8 @@ pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
         let raw = raw_msg.clone().unwrap();
        return  Some(Header {
             dh_pub_id: raw.0,
-            pn : raw.1,
-            n : raw.2,
-            ciphertext: raw.3.to_vec()
+            n : raw.1,
+            ciphertext: raw.2.to_vec()
         })
     }
 
