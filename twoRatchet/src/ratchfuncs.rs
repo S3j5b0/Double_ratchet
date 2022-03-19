@@ -28,9 +28,9 @@ pub struct state {
     tmp_skey : Option<StaticSecret>,
     dhr_ack_nonce : u16,
     dhr_res_nonce : u16,
-    pub dh_id : usize,
-    pub ad_i : Vec<u8>,
-    pub ad_r : Vec<u8>
+    dh_id : usize,
+    ad_i : Vec<u8>,
+    ad_r : Vec<u8>
 
 
 }
@@ -108,14 +108,15 @@ impl state {
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
 
-
+        self.tmp_pkey = Some(i_dh_public_key);
+        self.tmp_skey = Some(i_dh_privkey);
         let dh_req = DhPayload{
             pk : i_dh_public_key.as_bytes().to_vec(),
             nonce : self.dhr_res_nonce +1
         };
-        println!("pk {:?}", i_dh_public_key.as_bytes().to_vec());
-        let serial_dhr = serialize_dhr(dh_req);
+
         
+        let serial_dhr = serialize_dhr(dh_req);
         
         let enc = self.ratchet_encrypt(&serial_dhr, &self.ad_i.clone())[1..].to_vec();
         let mut encoded = [5].to_vec();
@@ -136,9 +137,6 @@ impl state {
             
         };
         
-        
-
-    
         // first we deserialize dhr and create our own dhrackknowledgement message
         let dhr_req = deserialize_dhr(&dhr_serial);
         self.dhr_res_nonce = dhr_req.nonce;
@@ -160,10 +158,12 @@ impl state {
         };
         
         let serial_dhr = serialize_dhr(dhr_ack_payload);
-
-        let dhr_ack = encrypt(&self.rk[..16], &CONSTANT_NONCE, &serial_dhr, &self.ad_r);
-
-
+        let dhr_ack = if !self.isready{
+            encrypt(&self.rk[..16], &CONSTANT_NONCE, &serial_dhr, &self.ad_r)
+        }else{
+            self.ratchet_encrypt(&serial_dhr, &self.ad_r.clone())[1..].to_vec()
+            
+        };
         let mut encoded = [6].to_vec();
         encoded.extend(dhr_ack);
         self.isready = true;
@@ -171,6 +171,7 @@ impl state {
 
         // We then do the ratchet
         let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key), &self.rk);
+        
         let (rk, cks) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key),&rk);
 
         self.dh_id += 1;
@@ -192,9 +193,18 @@ impl state {
     }
 
     pub fn ratchet_i(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
-        let dhr_ack_serial =  match decrypt(&self.rk[..16], &CONSTANT_NONCE, &dhr_ack_encrypted, &self.ad_r){
+
+        
+        let dhr_ack_serial = if !self.isready {
+          match decrypt(&self.rk[..16], &CONSTANT_NONCE, &dhr_ack_encrypted, &self.ad_r){
             Some(x) => x,
             None => return false,
+        }
+        } else {
+            match self.ratchet_decrypt(dhr_ack_encrypted){    
+                Some(x) => x,
+                None => return false,
+            }
         };
         
         let dhr_ack = deserialize_dhr(&dhr_ack_serial);
@@ -210,15 +220,15 @@ impl state {
 
         let i_dh_privkey = self.tmp_skey.clone().unwrap();
         let i_dh_public_key = self.tmp_pkey.unwrap();
-        // We then do the ratchet
 
+        // We then do the ratchet
 
 
         let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
         
         let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
-        
-        
+
+
         self.dh_id += 1;
         self.dhs_priv = i_dh_privkey;
         self.dhs_pub = i_dh_public_key;

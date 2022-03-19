@@ -51,11 +51,11 @@ fn main() {
 
     let encr = r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r);
 
+
     let decr = match i_ratchet.i_receive(encr){
         Some((x,b)) => x,
         None => [0].to_vec(), // do nothing
     };
-    assert_eq!(decr,b"downlink".to_vec());
 
 
 
@@ -64,13 +64,31 @@ fn main() {
     let newpk = i_ratchet.i_initiate_ratch();
 
 
-    let newout = match  r_ratchet.r_receive(newpk) {
+
+    // R recevies dhr res
+    let dh_ack = match  r_ratchet.r_receive(newpk) {
         Some((x,b)) => x,
         None => [0].to_vec(), // in this case, do nothing
     }; 
+    // and responds with a dhr ack, which i receives
+    println!("________");
+    let _ratchdone =  i_ratchet.i_receive(dh_ack); 
+
+    let lostmsg = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
+    let msg3 = i_ratchet.ratchet_encrypt(&b"msg3".to_vec(), ad_i);
 
 
-    
+    let dec0 = match r_ratchet.r_receive(msg3){
+        Some((x,b)) => x,
+        None => [0].to_vec(),
+    };
+
+    assert_eq!(b"msg3".to_vec(),dec0);
+    let declost = match r_ratchet.r_receive(lostmsg){
+        Some((x,b)) => x,
+        None => [0].to_vec(),
+    };
+    assert_eq!(b"msg3".to_vec(),dec0);
 /*
     let header_i_lost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
 
