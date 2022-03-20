@@ -4,6 +4,12 @@ use rand_core::{OsRng,};
 
 use twoRatchet::ratchfuncs::{state};
 
+use ccm::{
+    aead::{generic_array::GenericArray, Aead, NewAead, Payload},
+    consts::{U13, U8},
+    Ccm,
+};
+
 fn main() {
     //// TODO:
     /// make error handling for aead decrpyiton
@@ -20,7 +26,6 @@ fn main() {
     let(mut i_ratchet, dhr_req)  = state::init_i(sk,ad_i.to_vec(), ad_r.to_vec());
 
     let mut r_ratchet = state::init_r(sk,  ad_i.to_vec(), ad_r.to_vec());
-
 
 
 
@@ -62,8 +67,7 @@ fn main() {
     // now I wants to ratchet again
 
     let newpk = i_ratchet.i_initiate_ratch();
-
-
+    println!("len {}", newpk.len());
 
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(newpk) {
@@ -89,26 +93,8 @@ fn main() {
         None => [0].to_vec(),
     };
     assert_eq!(b"msg3".to_vec(),dec0);
-/*
-    let header_i_lost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-
-    let header_r_lost = r_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_r);
-    
-for _ in 1..5 {
-    let header_i = i_ratchet.ratchet_encrypt(&b"bonkas".to_vec(), ad_i);
 
 
-    let dec0 = r_ratchet.ratchet_decrypt_r(&header_i,ad_i);
-
-    assert_eq!(dec0, b"bonkas".to_vec());
-
-    let header_r= r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r);
-
-    let deci = i_ratchet.ratchet_decrypt_i(&header_r,ad_r);
-
-    assert_eq!(deci, b"downlink".to_vec());
-}
-*/
 
 
 /*

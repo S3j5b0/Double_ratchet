@@ -26,8 +26,8 @@ pub struct state {
     mk_skipped : HashMap<(usize, usize), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
-    dhr_ack_nonce : u16,
-    dhr_res_nonce : u16,
+    dhr_ack_nonce : u8,
+    dhr_res_nonce : u8,
     dh_id : usize,
     ad_i : Vec<u8>,
     ad_r : Vec<u8>
@@ -77,8 +77,10 @@ impl state {
             pk : i_dh_public_key.as_bytes().to_vec(),
             nonce : 1
         };
-        let serial_dhr = serialize_dhr(first_dh_req);
-        let enc_dhr = encrypt(&sk[..16], &CONSTANT_NONCE, &serial_dhr, &ad_i) ;
+
+    
+        let concatted_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), 1);
+        let enc_dhr = encrypt(&sk[..16], &CONSTANT_NONCE, &concatted_dhr, &ad_i);
         let mut encoded = [5].to_vec();
         encoded.extend(enc_dhr);
 
@@ -115,10 +117,9 @@ impl state {
             nonce : self.dhr_res_nonce +1
         };
 
-        
-        let serial_dhr = serialize_dhr(dh_req);
-        
-        let enc = self.ratchet_encrypt(&serial_dhr, &self.ad_i.clone())[1..].to_vec();
+        let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
+
+        let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone())[1..].to_vec();
         let mut encoded = [5].to_vec();
         encoded.extend(enc);
         encoded
@@ -138,7 +139,7 @@ impl state {
         };
         
         // first we deserialize dhr and create our own dhrackknowledgement message
-        let dhr_req = deserialize_dhr(&dhr_serial);
+        let dhr_req = split_dhr(dhr_serial);
         self.dhr_res_nonce = dhr_req.nonce;
 
         let mut buf = [0; 32];
@@ -157,11 +158,11 @@ impl state {
             nonce :self.dhr_ack_nonce,
         };
         
-        let serial_dhr = serialize_dhr(dhr_ack_payload);
+        let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);;
         let dhr_ack = if !self.isready{
-            encrypt(&self.rk[..16], &CONSTANT_NONCE, &serial_dhr, &self.ad_r)
+            encrypt(&self.rk[..16], &CONSTANT_NONCE, &concat_dhr, &self.ad_r)
         }else{
-            self.ratchet_encrypt(&serial_dhr, &self.ad_r.clone())[1..].to_vec()
+            self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone())[1..].to_vec()
             
         };
         let mut encoded = [6].to_vec();
@@ -207,7 +208,7 @@ impl state {
             }
         };
         
-        let dhr_ack = deserialize_dhr(&dhr_ack_serial);
+        let dhr_ack = split_dhr(dhr_ack_serial);
 
         // creating keys
         let mut buf = [0; 32];
@@ -411,6 +412,24 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
     (rk.try_into().unwrap(),ck.try_into().unwrap())
 }
 
+
+fn concat_dhr(input: &[u8], mtype: u8) -> Vec<u8> {
+
+    let mut front = [1].to_vec();
+    front.extend(input);
+
+    front
+}
+fn split_dhr(input: Vec<u8>) -> DhPayload {
+
+    let payload  =DhPayload {
+        pk : input[1..].to_vec(),
+        nonce : input[..1][0]
+    };
+
+    payload
+}
+
 pub struct Header {
     pub n: usize, // Message Number
     pub dh_pub_id:usize,
@@ -433,12 +452,12 @@ impl Header {
 
 pub struct DhPayload {
     pub pk: Vec<u8>, // public key that is sent
-    pub nonce : u16, // DHRAckNonce, or DHRResNonce
+    pub nonce : u8, // DHRAckNonce, or DHRResNonce
 }
 impl DhPayload {
 
 
-    pub fn new( pk : Vec<u8>, nonce : u16) -> Self {
+    pub fn new( pk : Vec<u8>, nonce : u8) -> Self {
         DhPayload {
             pk: pk,
             nonce: nonce,

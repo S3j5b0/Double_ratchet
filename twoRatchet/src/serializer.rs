@@ -33,7 +33,7 @@ pub fn deserialize_dhr(serial_pk: &[u8]) ->DhPayload{
 
     let mut temp = Vec::with_capacity(serial_pk.len() );
 
-    let raw_pk :  (ByteBuf,u16)=  decode_sequence(serial_pk, 2, &mut temp).unwrap();
+    let raw_pk :  (ByteBuf,u8)=  decode_sequence(serial_pk, 2, &mut temp).unwrap();
 
 
     
@@ -44,25 +44,7 @@ pub fn deserialize_dhr(serial_pk: &[u8]) ->DhPayload{
     }
     
 }
-pub fn serialize_pk(pk: &Vec<u8>) ->Vec<u8> {
-    let tmp : usize = 1;
-    let raw_msg = (
-        Bytes::new(&pk),
-        tmp,
-    );
-    encode_sequence(raw_msg)
-}
-pub fn deserialize_pk(serial_pk: &[u8]) ->Vec<u8> {
 
-
-    let mut temp = Vec::with_capacity(serial_pk.len() + 1);
-
-    let raw_pk :  (ByteBuf,usize)=  decode_sequence(serial_pk, 2, &mut temp).unwrap();
-
-
-    raw_pk.0.to_vec()
-    
-}
 pub fn serialize_header(msg: &Header) ->Vec<u8> {
 
     let raw_msg = (

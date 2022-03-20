@@ -11,10 +11,6 @@ pub fn encrypt(
     plaintext: &[u8],
     ad: &[u8],
 ) -> Vec<u8> {
-   /* println!("=========================================");
-    println!("enc mk: {:?}", key);
-    println!("nonce: {:?}", nonce);
-    println!("ad: {:?}", ad);*/
 
     // Initialize CCM mode
   
