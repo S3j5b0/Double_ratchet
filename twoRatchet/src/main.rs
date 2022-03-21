@@ -34,7 +34,7 @@ fn main() {
 
 
     // r recevies the pk of i, ratcets, and sends it's own pk
-
+/*
     let newout = match  r_ratchet.r_receive(dhr_req) {
         Some((x,b)) => x,
         None => [0].to_vec(), // in this case, do nothing
@@ -47,7 +47,7 @@ fn main() {
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
     let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-
+*/
     let enc0 = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
 
 
@@ -70,7 +70,7 @@ fn main() {
 
     // now I wants to ratchet again
 
-    let newpk = i_ratchet.i_initiate_ratch();
+   let newpk = i_ratchet.i_initiate_ratch();
 
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(newpk) {
@@ -95,6 +95,7 @@ fn main() {
         None => [0].to_vec(),
     };
     assert_eq!(b"msg3".to_vec(),dec0);
+
 
 
 

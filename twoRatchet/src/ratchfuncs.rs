@@ -19,7 +19,7 @@ pub struct state {
     pub rk: [u8;32],
     pub cks: Option<[u8;32]>, // sending chain key
     pub ckr: Option<[u8;32]>, // receiving chain key
-    ns: usize, // sending message numbering
+    pub ns: usize, // sending message numbering
     nr: usize, // receiving message numbering
     pn: usize, // skipped messages from previous sending chain
     mk_skipped : HashMap<(usize, usize), [u8; 32]>,
@@ -311,7 +311,7 @@ impl state {
         }
     }
  
-    pub fn r_receive(&mut self,input: Vec<u8>) -> Option<(Vec<u8>,bool)>{
+    pub fn r_receive(&mut self,input: &[u8]) -> Option<(Vec<u8>,bool)>{
         match input[0] {
             5 => {
                 let remove_mtype = &input[1..];
