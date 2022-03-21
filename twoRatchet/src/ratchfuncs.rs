@@ -13,7 +13,6 @@ pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: usize = 200;
 pub struct state {
     pub is_i : bool,
-    pub isready : bool,
     dhs_priv: StaticSecret,
     dhs_pub: PublicKey,
     dhr_pub: Option<PublicKey>,
@@ -39,20 +38,19 @@ impl state {
 
 
 
-    pub fn init_r(sk: [u8; 32],  ad_i :Vec<u8>, ad_r:Vec<u8>) -> Self {
+    pub fn init_r(sk: [u8; 32], ckr: [u8; 32], sck: [u8; 32],  ad_i :Vec<u8>, ad_r:Vec<u8>) -> Self {
 
 
         let r_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let r_dh_public_key = PublicKey::from(&r_dh_privkey);
         state {
             is_i : false,
-            isready : false,
             dhs_priv : r_dh_privkey,
             dhs_pub : r_dh_public_key,
             dhr_pub: None,
             rk: sk,
-            cks: None,
-            ckr: None,
+            cks: Some(sck),
+            ckr: Some(ckr),
             ns: 0,
             nr: 0,
             pn: 0,
@@ -68,7 +66,7 @@ impl state {
     }
 
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
-    pub fn init_i(sk: [u8; 32], ad_i :Vec<u8>,ad_r: Vec<u8>) -> (Self, Vec<u8>) {
+    pub fn init_i(sk: [u8; 32],  ckr: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> (Self, Vec<u8>) {
 
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
@@ -79,20 +77,15 @@ impl state {
         };
 
     
-        let concatted_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), 1);
-        let enc_dhr = encrypt(&sk[..16], &CONSTANT_NONCE, &concatted_dhr, &ad_i);
-        let mut encoded = [5].to_vec();
-        encoded.extend(enc_dhr);
 
-        (state {
+        let mut state  = state {
             is_i: true,
-            isready : false,
             dhs_priv : i_dh_privkey.clone(),
             dhs_pub : i_dh_public_key,
             dhr_pub: None,
             rk: sk,
-            cks: None,
-            ckr: None,
+            cks: Some(sck),
+            ckr: Some(ckr),
             ns: 0,
             nr: 0,
             pn: 0,
@@ -104,7 +97,12 @@ impl state {
             dh_id: 0,
             ad_i,
             ad_r
-        }, encoded)
+        };
+        let concatted_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), 1);
+        let enc_dhr = state.ratchet_encrypt(&concatted_dhr, &state.ad_i.clone());
+        let mut encoded = [5].to_vec();
+        encoded.extend(enc_dhr);
+        (state, encoded)
     }
     pub fn i_initiate_ratch(&mut self) -> Vec<u8> {
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
@@ -126,15 +124,10 @@ impl state {
     }
     pub fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
         // first, attempt to decrypt incoming key
-        let dhr_serial = if !self.isready{
-            match decrypt(&self.rk[..16], &CONSTANT_NONCE, &dhr_encrypted, &self.ad_i)  {
-                Some(x) => x,
-                None => return None }
-        }else{
-            match self.ratchet_decrypt(dhr_encrypted) {
+        let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
                 Some(x) => x,
                 None => return None,
-            }
+            
             
         };
         
@@ -159,16 +152,11 @@ impl state {
         };
         
         let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);;
-        let dhr_ack = if !self.isready{
-            encrypt(&self.rk[..16], &CONSTANT_NONCE, &concat_dhr, &self.ad_r)
-        }else{
-            self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone())[1..].to_vec()
+        let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone())[1..].to_vec();
             
-        };
+        
         let mut encoded = [6].to_vec();
         encoded.extend(dhr_ack);
-        self.isready = true;
-
 
         // We then do the ratchet
         let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key), &self.rk);
@@ -196,16 +184,10 @@ impl state {
     pub fn ratchet_i(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
 
         
-        let dhr_ack_serial = if !self.isready {
-          match decrypt(&self.rk[..16], &CONSTANT_NONCE, &dhr_ack_encrypted, &self.ad_r){
-            Some(x) => x,
-            None => return false,
-        }
-        } else {
-            match self.ratchet_decrypt(dhr_ack_encrypted){    
+        let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
                 None => return false,
-            }
+            
         };
         
         let dhr_ack = split_dhr(dhr_ack_serial);
@@ -242,7 +224,6 @@ impl state {
         self.nr= 0;
         
         self.mk_skipped =  HashMap::new();
-        self.isready = true;
         true
     }
 

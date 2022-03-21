@@ -18,14 +18,18 @@ fn main() {
 
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
+    let downlink = [0, 171, 247, 26, 19, 92, 119, 193, 156, 216, 49, 89, 90, 174, 165, 23, 124, 247, 30, 79, 73, 164, 55, 63, 178, 39, 228, 26, 180, 224, 173, 104];
+    let uplink = [218, 132, 151, 66, 151, 72, 196, 104, 152, 13, 117, 94, 224, 7, 231, 216, 62, 155, 135, 52, 59, 100, 217, 236, 115, 100, 161, 95, 8, 146, 123, 146];
+    
+    
     let ad_r = &[1];
     let ad_i = &[2];
 
     // iFirst the two parties initialize, where I outputs her pk
 
-    let(mut i_ratchet, dhr_req)  = state::init_i(sk,ad_i.to_vec(), ad_r.to_vec());
+    let(mut i_ratchet, dhr_req)  = state::init_i(sk,downlink, uplink,ad_i.to_vec(), ad_r.to_vec());
 
-    let mut r_ratchet = state::init_r(sk,  ad_i.to_vec(), ad_r.to_vec());
+    let mut r_ratchet = state::init_r(sk, uplink,downlink, ad_i.to_vec(), ad_r.to_vec());
 
 
 
@@ -67,7 +71,6 @@ fn main() {
     // now I wants to ratchet again
 
     let newpk = i_ratchet.i_initiate_ratch();
-    println!("len {}", newpk.len());
 
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(newpk) {
@@ -75,7 +78,6 @@ fn main() {
         None => [0].to_vec(), // in this case, do nothing
     }; 
     // and responds with a dhr ack, which i receives
-    println!("________");
     let _ratchdone =  i_ratchet.i_receive(dh_ack); 
 
     let lostmsg = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
