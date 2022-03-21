@@ -1,51 +1,85 @@
 extern crate alloc;
 use rand_core::{OsRng,};
-
+use core::result::Result;
 use alloc::vec::Vec;
 use serde_bytes::{ByteBuf, Bytes};
 use x25519_dalek_ng::{self, PublicKey};
 
 use super::{
-    ratchfuncs::{Header}
+    ratchfuncs::{Header,DhPayload }
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn serialize_header(msg: &Header,ad:&[u8]) ->Vec<u8> {
+pub fn concat(dh_id: usize,  n: usize, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
         Bytes::new(&ad),
-        msg.public_key.as_bytes().to_vec(),
-        &msg.pn,
-        msg.n,
+        dh_id,
+        n,
     );
 
     encode_sequence(raw_msg)
 }
+pub fn serialize_dhr(dh: DhPayload) ->Vec<u8> {
+    let tmp : usize = 1;
+    let raw_msg = (
+        Bytes::new(&dh.pk),
+        dh.nonce,
+    );
+    encode_sequence(raw_msg)
+}
+pub fn deserialize_dhr(serial_pk: &[u8]) ->DhPayload{
 
-pub fn deserialize_header(msg: &[u8]) -> (Vec<u8>,Header) {
+
+    let mut temp = Vec::with_capacity(serial_pk.len() );
+
+    let raw_pk :  (ByteBuf,u8)=  decode_sequence(serial_pk, 2, &mut temp).unwrap();
+
+
+    
+
+    DhPayload {
+        pk:raw_pk.0.to_vec(),
+        nonce:raw_pk.1,
+    }
+    
+}
+
+pub fn serialize_header(msg: &Header) ->Vec<u8> {
+
+    let raw_msg = (
+        msg.dh_pub_id,
+        msg.n,
+        Bytes::new(&msg.ciphertext)
+    );
+
+    encode_sequence(raw_msg)
+}
+pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
     // Try to deserialize into our raw message format
-    let mut temp = Vec::with_capacity(msg.len() + 1);
-    let raw_msg: (ByteBuf,ByteBuf, usize ,usize) =
-        decode_sequence(msg, 4, &mut temp);
+    let mut temp = Vec::with_capacity(serial_header.len() + 1);
 
+    let raw_msg :Option<( usize ,usize, ByteBuf)>=  decode_sequence(serial_header, 3, &mut temp);
 
     // On success, just move the items into the "nice" message structure
-    let mut pk_bytes = [0; 32];
-    let ad = raw_msg.0.to_vec();
-    pk_bytes.copy_from_slice(&raw_msg.1.to_vec());
+    if raw_msg == None{
+        return None
+    } else {
+        let raw = raw_msg.clone().unwrap();
+       return  Some(Header {
+            dh_pub_id: raw.0,
+            n : raw.1,
+            ciphertext: raw.2.to_vec()
+        })
+    }
 
-    let pk = PublicKey::from(pk_bytes);
-    (ad, Header {
-        public_key : pk,
-        pn : raw_msg.2,
-        n : raw_msg.3,
-    })
+
 }
  fn decode_sequence<'a, T>(
     bytes: &[u8],
     n_items: usize,
     tmp_vec: &'a mut Vec<u8>,
-) -> T
+) -> Option<T>
 where
     T: serde::Deserialize<'a>,
 {
@@ -56,7 +90,8 @@ where
     tmp_vec.extend(bytes);
 
     // Now we can try to deserialize that
-    serde_cbor::from_slice(tmp_vec).expect("bad slice")
+    let res = serde_cbor::from_slice(tmp_vec).unwrap_or(None);
+    res
 }
 
 fn array_byte(n: usize) -> u8 {
