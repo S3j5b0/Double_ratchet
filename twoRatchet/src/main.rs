@@ -3,7 +3,7 @@ use x25519_dalek_ng::{PublicKey,StaticSecret, SharedSecret};
 use rand_core::{OsRng,};
 
 use twoRatchet::ratchfuncs::{state};
-
+use twoRatchet::serializer::{concat};
 use ccm::{
     aead::{generic_array::GenericArray, Aead, NewAead, Payload},
     consts::{U13, U8},
@@ -15,6 +15,7 @@ fn main() {
     /// make error handling for aead decrpyiton
 
 
+    println!("concat {}", concat(1,10,&[1]).len());
 
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
@@ -27,27 +28,25 @@ fn main() {
 
     // iFirst the two parties initialize, where I outputs her pk
 
-    let(mut i_ratchet, dhr_req)  = state::init_i(sk,downlink, uplink,ad_i.to_vec(), ad_r.to_vec());
+    let mut i_ratchet  = state::init_i(sk,downlink, uplink,ad_i.to_vec(), ad_r.to_vec());
 
     let mut r_ratchet = state::init_r(sk, uplink,downlink, ad_i.to_vec(), ad_r.to_vec());
 
 
 
-    // r recevies the pk of i, ratcets, and sends it's own pk
-/*
-    let newout = match  r_ratchet.r_receive(dhr_req) {
-        Some((x,b)) => x,
-        None => [0].to_vec(), // in this case, do nothing
-    };
-
-    // i receives the pk of r, and makes it's own ratchet
-    let _ratchdone =  i_ratchet.i_receive(newout); 
 
 
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
+
+    for n in 1..20 {
     let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-*/
+    println!("{}", n);
+    println!("len {}", enclost.len());
+    }
+
+
+
     let enc0 = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
 
 

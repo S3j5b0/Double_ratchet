@@ -10,7 +10,7 @@ use super::{
     serializer::{serialize_header, deserialize_header,concat, serialize_dhr,deserialize_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
-pub const MAX_SKIP: usize = 200;
+pub const MAX_SKIP: u16 = 200;
 pub struct state {
     pub is_i : bool,
     dhs_priv: StaticSecret,
@@ -19,10 +19,10 @@ pub struct state {
     pub rk: [u8;32],
     pub cks: Option<[u8;32]>, // sending chain key
     pub ckr: Option<[u8;32]>, // receiving chain key
-    pub ns: usize, // sending message numbering
-    nr: usize, // receiving message numbering
-    pn: usize, // skipped messages from previous sending chain
-    mk_skipped : HashMap<(usize, usize), [u8; 32]>,
+    pub ns: u16, // sending message numbering
+    nr: u16, // receiving message numbering
+    pn: u16, // skipped messages from previous sending chain
+    mk_skipped : HashMap<(usize, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
     dhr_ack_nonce : u8,
@@ -66,7 +66,7 @@ impl state {
     }
 
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
-    pub fn init_i(sk: [u8; 32],  ckr: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> (Self, Vec<u8>) {
+    pub fn init_i(sk: [u8; 32],  ckr: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> Self {
 
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
@@ -98,11 +98,8 @@ impl state {
             ad_i,
             ad_r
         };
-        let concatted_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), 1);
-        let enc_dhr = state.ratchet_encrypt(&concatted_dhr, &state.ad_i.clone());
-        let mut encoded = [5].to_vec();
-        encoded.extend(enc_dhr);
-        (state, encoded)
+
+        state
     }
     pub fn i_initiate_ratch(&mut self) -> Vec<u8> {
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
@@ -123,10 +120,11 @@ impl state {
         encoded
     }
     pub fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
+
         // first, attempt to decrypt incoming key
         let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
                 Some(x) => x,
-                None => return None,
+                None => panic!("ahhrhrh"),
             
             
         };
@@ -235,8 +233,8 @@ impl state {
 
  
         let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(self.dh_id, self.ns, &ad)); // concat
-
-
+        println!("dh {}, ns {}, ad {:?}",self.dh_id, self.ns, &ad );
+        println!("len concat {}",&concat(self.dh_id, self.ns, &ad).len() );
         let header = Header::new(  self.ns,self.dh_id,encrypted_data.clone());
  
         self.ns += 1;
@@ -268,10 +266,12 @@ impl state {
             Some(d) => Some(d),
             None => {
                 
+                
                 self.skip_message_keys(deserial_hdr.n);
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 self.ckr = Some(ckr);
                 self.nr += 1;
+
 
 
                 let out = decrypt(&mk[..16],&CONSTANT_NONCE, &deserial_hdr.ciphertext, &concat(deserial_hdr.dh_pub_id,deserial_hdr.n, &ad));
@@ -282,7 +282,7 @@ impl state {
 
 
 
-    fn skip_message_keys(&mut self, until: usize) -> Result<(), &str> {
+    fn skip_message_keys(&mut self, until: u16) -> Result<(), &str> {
         if self.nr + MAX_SKIP < until {
             return Err("Skipped to many keys");
         }
@@ -312,15 +312,19 @@ impl state {
     }
  
     pub fn r_receive(&mut self,input: &[u8]) -> Option<(Vec<u8>,bool)>{
+
+        
         match input[0] {
             5 => {
                 let remove_mtype = &input[1..];
                 match self.ratchet_r(remove_mtype.to_vec()) {
-                    Some(x) => return Some((x,true)),
+                    Some(x) => return {
+                        Some((x,true))},
                     None => return None,
                 }
             },
             7 => {
+                
                 let remove_mtype = &input[1..];
                 match self.ratchet_decrypt(remove_mtype.to_vec()){
                     Some(x) => return Some((x,false)),
@@ -412,7 +416,7 @@ fn split_dhr(input: Vec<u8>) -> DhPayload {
 }
 
 pub struct Header {
-    pub n: usize, // Message Number
+    pub n: u16, // Message Number
     pub dh_pub_id:usize,
     pub ciphertext : Vec<u8>,
 }
@@ -420,7 +424,7 @@ pub struct Header {
 impl Header {
 
 
-    pub fn new( n: usize, dh_pub_id: usize, cipher: Vec<u8>) -> Self {
+    pub fn new( n: u16, dh_pub_id: usize, cipher: Vec<u8>) -> Self {
         Header {
             n : n,
             dh_pub_id: dh_pub_id,

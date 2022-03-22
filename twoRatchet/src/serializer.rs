@@ -10,15 +10,19 @@ use super::{
 };
 use serde::Serialize; 
 /// Concat header with associated data
-pub fn concat(dh_id: usize,  n: usize, ad:&[u8]) ->Vec<u8> {
+pub fn concat(dh_id: usize,  n: u16, ad:&[u8]) ->Vec<u8> {
 
     let raw_msg = (
-        Bytes::new(&ad),
         dh_id,
         n,
     );
 
-    encode_sequence(raw_msg)
+    let mut seq = encode_sequence(raw_msg);
+    seq.extend(ad);
+    if seq.len() > 3 {
+        return seq[..3].to_vec()
+    } 
+    seq
 }
 pub fn serialize_dhr(dh: DhPayload) ->Vec<u8> {
     let tmp : usize = 1;
@@ -59,7 +63,7 @@ pub fn deserialize_header(serial_header: &[u8]) -> Option<Header> {
     // Try to deserialize into our raw message format
     let mut temp = Vec::with_capacity(serial_header.len() + 1);
 
-    let raw_msg :Option<( usize ,usize, ByteBuf)>=  decode_sequence(serial_header, 3, &mut temp);
+    let raw_msg :Option<( usize ,u16, ByteBuf)>=  decode_sequence(serial_header, 3, &mut temp);
 
     // On success, just move the items into the "nice" message structure
     if raw_msg == None{
