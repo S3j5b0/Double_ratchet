@@ -15,7 +15,6 @@ fn main() {
     /// make error handling for aead decrpyiton
 
 
-    println!("concat {}", concat(1,10,&[1]).len());
 
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29, 68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207];
@@ -39,7 +38,7 @@ fn main() {
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
 
-    for n in 1..20 {
+    for n in 1..40 {
     let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
     println!("{}", n);
     println!("len {}", enclost.len());

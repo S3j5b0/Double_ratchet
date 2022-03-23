@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{serialize_header, deserialize_header,concat, serialize_dhr,deserialize_dhr}
+    serializer::{serialize_header, deserialize_header,concat,prepare_header,unpack_header}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: u16 = 200;
@@ -22,12 +22,12 @@ pub struct state {
     pub ns: u16, // sending message numbering
     nr: u16, // receiving message numbering
     pn: u16, // skipped messages from previous sending chain
-    mk_skipped : HashMap<(usize, u16), [u8; 32]>,
+    mk_skipped : HashMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
     dhr_ack_nonce : u8,
     dhr_res_nonce : u8,
-    dh_id : usize,
+    dh_id : u16,
     ad_i : Vec<u8>,
     ad_r : Vec<u8>
 
@@ -149,7 +149,7 @@ impl state {
             nonce :self.dhr_ack_nonce,
         };
         
-        let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);;
+        let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
         let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone())[1..].to_vec();
             
         
@@ -232,13 +232,12 @@ impl state {
 
 
  
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat(self.dh_id, self.ns, &ad)); // concat
-        println!("dh {}, ns {}, ad {:?}",self.dh_id, self.ns, &ad );
-        println!("len concat {}",&concat(self.dh_id, self.ns, &ad).len() );
+        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat( self.ns, &ad)); // concat
+
         let header = Header::new(  self.ns,self.dh_id,encrypted_data.clone());
  
         self.ns += 1;
-        let hdr = serialize_header(&header); // leaving out nonce, since it is a constant, as described bysignal docs
+        let hdr = prepare_header(header); // leaving out nonce, since it is a constant, as described bysignal docs
         let mtype = if self.is_i {
             7
         } else {
@@ -250,10 +249,7 @@ impl state {
     }
     
     pub fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        let deserial_hdr = match deserialize_header(&header) {
-            Some(x) => x,
-            None => return None
-        };
+        let deserial_hdr =  unpack_header(header);
         
         let ad = if self.is_i {
             self.ad_r.clone()
@@ -274,7 +270,7 @@ impl state {
 
 
 
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, &deserial_hdr.ciphertext, &concat(deserial_hdr.dh_pub_id,deserial_hdr.n, &ad));
+                let out = decrypt(&mk[..16],&CONSTANT_NONCE, &deserial_hdr.ciphertext, &concat(deserial_hdr.n, &ad));
                 out
             }
         }
@@ -305,7 +301,7 @@ impl state {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
-            decrypt(&mk[..16], nonce,ciphertext, &concat(header.dh_pub_id,header.n, &ad))
+            decrypt(&mk[..16], nonce,ciphertext, &concat(header.n, &ad))
         } else {
             None
         }
@@ -398,9 +394,9 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
 }
 
 
-fn concat_dhr(input: &[u8], mtype: u8) -> Vec<u8> {
+fn concat_dhr(input: &[u8], dhrnonce: u8) -> Vec<u8> {
 
-    let mut front = [1].to_vec();
+    let mut front = [dhrnonce].to_vec();
     front.extend(input);
 
     front
@@ -417,14 +413,14 @@ fn split_dhr(input: Vec<u8>) -> DhPayload {
 
 pub struct Header {
     pub n: u16, // Message Number
-    pub dh_pub_id:usize,
+    pub dh_pub_id:u16,
     pub ciphertext : Vec<u8>,
 }
 
 impl Header {
 
 
-    pub fn new( n: u16, dh_pub_id: usize, cipher: Vec<u8>) -> Self {
+    pub fn new( n: u16, dh_pub_id: u16, cipher: Vec<u8>) -> Self {
         Header {
             n : n,
             dh_pub_id: dh_pub_id,
