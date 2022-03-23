@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{serialize_header, deserialize_header,concat,prepare_header,unpack_header}
+    serializer::{concat,prepare_header,unpack_header}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: u16 = 200;
