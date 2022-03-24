@@ -4,6 +4,7 @@ use ccm::{
     consts::{U13, U8},
     Ccm,
 };
+use alloc::vec::Vec;
 
 pub fn encrypt(
     key: &[u8],

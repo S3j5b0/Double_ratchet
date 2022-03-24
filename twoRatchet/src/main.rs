@@ -40,8 +40,7 @@ fn main() {
 
     for n in 1..40 {
     let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-    println!("{}", n);
-    println!("len {}", enclost.len());
+
     }
 
 
@@ -69,6 +68,8 @@ fn main() {
     // now I wants to ratchet again
 
    let newpk = i_ratchet.i_initiate_ratch();
+
+   println!("newpk {}", newpk.len());
 
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(&newpk) {

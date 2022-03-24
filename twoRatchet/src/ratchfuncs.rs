@@ -2,7 +2,8 @@
 use x25519_dalek_ng::{self, SharedSecret,PublicKey, StaticSecret};
 use hkdf::Hkdf;
 use generic_array::{typenum::U32, GenericArray};
-use std::collections::HashMap;
+use alloc::vec::Vec;
+use alloc::collections::BTreeMap;
 use sha2::Sha256;
 use rand_core::{OsRng,};
 use super::{
@@ -22,7 +23,7 @@ pub struct state {
     pub ns: u16, // sending message numbering
     nr: u16, // receiving message numbering
     pn: u16, // skipped messages from previous sending chain
-    mk_skipped : HashMap<(u16, u16), [u8; 32]>,
+    mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
     dhr_ack_nonce : u8,
@@ -54,7 +55,7 @@ impl state {
             ns: 0,
             nr: 0,
             pn: 0,
-            mk_skipped: HashMap::new(),
+            mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
             dhr_ack_nonce: 0,
@@ -89,7 +90,7 @@ impl state {
             ns: 0,
             nr: 0,
             pn: 0,
-            mk_skipped: HashMap::new(),
+            mk_skipped: BTreeMap::new(),
             tmp_pkey: Some(i_dh_public_key),
             tmp_skey: Some(i_dh_privkey),
             dhr_ack_nonce: 0,
@@ -113,6 +114,7 @@ impl state {
         };
 
         let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
+
 
         let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone())[1..].to_vec();
         let mut encoded = [5].to_vec();
@@ -172,7 +174,7 @@ impl state {
         self.ns= 0;
         self.nr= 0;
         
-        self.mk_skipped =  HashMap::new();
+        self.mk_skipped =  BTreeMap::new();
 
         // return the key
         Some(encoded) 
@@ -221,7 +223,7 @@ impl state {
         self.ns= 0;
         self.nr= 0;
         
-        self.mk_skipped =  HashMap::new();
+        self.mk_skipped =  BTreeMap::new();
         true
     }
 
