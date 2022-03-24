@@ -26,8 +26,8 @@ pub struct state {
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
-    dhr_ack_nonce : u8,
-    dhr_res_nonce : u8,
+    dhr_ack_nonce : u16,
+    dhr_res_nonce : u16,
     dh_id : u16,
     ad_i : Vec<u8>,
     ad_r : Vec<u8>
@@ -396,18 +396,20 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
 }
 
 
-fn concat_dhr(input: &[u8], dhrnonce: u8) -> Vec<u8> {
+fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
-    let mut front = [dhrnonce].to_vec();
+    let nonce_bytes = dhrnonce.to_be_bytes();
+    let mut front = nonce_bytes.to_vec();
     front.extend(input);
 
     front
 }
 fn split_dhr(input: Vec<u8>) -> DhPayload {
 
+    let nonce_val = ((input[0] as u16) << 8) | input[1] as u16;
     let payload  =DhPayload {
-        pk : input[1..].to_vec(),
-        nonce : input[..1][0]
+        pk : input[2..].to_vec(),
+        nonce : nonce_val
     };
 
     payload
@@ -435,12 +437,12 @@ impl Header {
 
 pub struct DhPayload {
     pub pk: Vec<u8>, // public key that is sent
-    pub nonce : u8, // DHRAckNonce, or DHRResNonce
+    pub nonce : u16, // DHRAckNonce, or DHRResNonce
 }
 impl DhPayload {
 
 
-    pub fn new( pk : Vec<u8>, nonce : u8) -> Self {
+    pub fn new( pk : Vec<u8>, nonce : u16) -> Self {
         DhPayload {
             pk: pk,
             nonce: nonce,
