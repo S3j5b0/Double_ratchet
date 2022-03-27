@@ -116,9 +116,7 @@ impl state {
 
         let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
         
-
-        let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone())[1..].to_vec();
-        println!("dhrenc {}", enc.len());
+        let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone()).to_vec();
         let mut encoded = [5].to_vec();
         encoded.extend(enc);
         encoded
@@ -154,7 +152,7 @@ impl state {
         };
         
         let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
-        let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone())[1..].to_vec();
+        let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone()).to_vec();
             
         
         let mut encoded = [6].to_vec();
@@ -230,14 +228,14 @@ impl state {
     }
 
 
-    pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
                 
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
- 
+        
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(&nonce, self.dh_id, self.ns, &ad)); // concat
 
 
@@ -246,6 +244,11 @@ impl state {
  
         self.ns += 1;
         let hdr = prepare_header(header); // leaving out nonce, since it is a constant, as described bysignal docs
+        hdr
+    }
+
+    pub fn ratchet_encrypt_payload(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
+        let hdr = self.ratchet_encrypt(plaintext, ad);
         let mtype = if self.is_i {
             7
         } else {
@@ -256,8 +259,10 @@ impl state {
         encoded
     }
     
-    pub fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
+    fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
+        println!("serialhdrlen Dec {:?}", &header.clone());
         let deserial_hdr =  unpack_header(header);
+        
         
         let ad = if self.is_i {
             self.ad_r.clone()
@@ -272,13 +277,12 @@ impl state {
             Some(d) => Some(d),
             None => {
                 
-                self.skip_message_keys(deserial_hdr.n);
+                self.skip_message_keys(deserial_hdr.fcnt);
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 self.ckr = Some(ckr);
                 self.nr += 1;
-
-                println!("decrypt nonce {:?}", &deserial_hdr.nonce);
-                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(&deserial_hdr.nonce,self.dh_id,deserial_hdr.n, &ad));
+               
+                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(&deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &ad));
                 out
             }
         }
@@ -305,11 +309,11 @@ impl state {
     }
 
     fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8], ad: &[u8]) -> Option<Vec<u8>> {
-        if self.mk_skipped.contains_key(&(header.dh_pub_id, header.n)) {
-            let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
+        if self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
+            let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
                 .unwrap();
-            self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
-            decrypt(&mk[..16], nonce,ciphertext, &concat(nonce,self.dh_id,header.n, &ad))
+            self.mk_skipped.remove(&(header.dh_pub_id, header.fcnt)).unwrap();
+            decrypt(&mk[..16], nonce,ciphertext, &concat(nonce,self.dh_id,header.fcnt, &ad))
         } else {
             None
         }
@@ -405,7 +409,7 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
 
 
 pub struct Header {
-    pub n: u16, // Message Number
+    pub fcnt: u16, // Message Number
     pub dh_pub_id:u16,
     pub ciphertext : Vec<u8>,
     pub nonce : Vec<u8>
@@ -416,7 +420,7 @@ impl Header {
 
     pub fn new( n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :Vec<u8>) -> Self {
         Header {
-            n : n,
+            fcnt : n,
             dh_pub_id: dh_pub_id,
             ciphertext: cipher,
             nonce: nonce

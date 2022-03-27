@@ -38,13 +38,13 @@ fn main() {
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
 
     for n in 1..40 {
-    let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
+    let enclost = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
 
     }
 
 
 
-    let enc0 = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
+    let enc0 = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
 
 
     let dec0 = match r_ratchet.r_receive(&enc0){
@@ -54,7 +54,7 @@ fn main() {
 
     assert_eq!(dec0, b"lost".to_vec());
 
-    let encr = r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r);
+    let encr = r_ratchet.ratchet_encrypt_payload(&b"downlink".to_vec(), ad_r);
 
 
     let decr = match i_ratchet.i_receive(encr){
@@ -65,12 +65,8 @@ fn main() {
 
 
     // now I wants to ratchet again
-
+    println!("initiate");
    let newpk = i_ratchet.i_initiate_ratch();
-    println!("newpk {:?}", newpk.len());
-
-   println!("newpk {}", newpk.len());
-
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(&newpk) {
         Some((x,b)) => x,
@@ -79,8 +75,8 @@ fn main() {
     // and responds with a dhr ack, which i receives
     let _ratchdone =  i_ratchet.i_receive(dh_ack); 
 
-    let lostmsg = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-    let msg3 = i_ratchet.ratchet_encrypt(&b"msg3".to_vec(), ad_i);
+    let lostmsg = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
+    let msg3 = i_ratchet.ratchet_encrypt_payload(&b"msg3".to_vec(), ad_i);
 
 
     let dec0 = match r_ratchet.r_receive(&msg3){

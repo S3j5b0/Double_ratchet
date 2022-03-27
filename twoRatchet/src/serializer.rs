@@ -18,7 +18,7 @@ pub fn concat(nonce : &[u8],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {
 
 
 pub fn prepare_header(msg: Header) ->Vec<u8> {
-    let nbytes = msg.n.to_be_bytes();
+    let nbytes = msg.fcnt.to_be_bytes();
     let dh_id_bytes = msg.dh_pub_id.to_be_bytes();
     let mut front = [nbytes, dh_id_bytes].concat().to_vec();
     front.extend(msg.nonce);
