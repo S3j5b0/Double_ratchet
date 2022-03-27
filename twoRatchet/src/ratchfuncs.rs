@@ -5,10 +5,10 @@ use generic_array::{typenum::U32, GenericArray};
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
 use sha2::Sha256;
-use rand_core::{OsRng,};
+use rand_core::{OsRng,RngCore};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{concat,prepare_header,unpack_header}
+    serializer::{concat,prepare_header,unpack_header,concat_dhr,split_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub const MAX_SKIP: u16 = 200;
@@ -112,11 +112,13 @@ impl state {
             pk : i_dh_public_key.as_bytes().to_vec(),
             nonce : self.dhr_res_nonce +1
         };
+        
 
         let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
-
+        
 
         let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone())[1..].to_vec();
+        println!("dhrenc {}", enc.len());
         let mut encoded = [5].to_vec();
         encoded.extend(enc);
         encoded
@@ -231,12 +233,16 @@ impl state {
     pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.cks.unwrap());
         self.cks = Some(cks);
-
+                
+        let mut nonce = [0;13];
+        OsRng.fill_bytes(&mut nonce);
 
  
-        let encrypted_data = encrypt(&mk[..16], &CONSTANT_NONCE, plaintext, &concat( self.ns, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(&nonce, self.dh_id, self.ns, &ad)); // concat
 
-        let header = Header::new(  self.ns,self.dh_id,encrypted_data.clone());
+
+
+        let header = Header::new(  self.ns,self.dh_id,encrypted_data.clone(),nonce.to_vec());
  
         self.ns += 1;
         let hdr = prepare_header(header); // leaving out nonce, since it is a constant, as described bysignal docs
@@ -259,20 +265,20 @@ impl state {
             self.ad_i.clone()
         };
         
-        let plaintext = self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, &CONSTANT_NONCE,&ad);
+        
+        let plaintext = self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, &deserial_hdr.nonce,&ad);
+        
         match plaintext  {
             Some(d) => Some(d),
             None => {
-                
                 
                 self.skip_message_keys(deserial_hdr.n);
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 self.ckr = Some(ckr);
                 self.nr += 1;
 
-
-
-                let out = decrypt(&mk[..16],&CONSTANT_NONCE, &deserial_hdr.ciphertext, &concat(deserial_hdr.n, &ad));
+                println!("decrypt nonce {:?}", &deserial_hdr.nonce);
+                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(&deserial_hdr.nonce,self.dh_id,deserial_hdr.n, &ad));
                 out
             }
         }
@@ -298,12 +304,12 @@ impl state {
         }
     }
 
-    fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8; 13], ad: &[u8]) -> Option<Vec<u8>> {
+    fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8], ad: &[u8]) -> Option<Vec<u8>> {
         if self.mk_skipped.contains_key(&(header.dh_pub_id, header.n)) {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.n))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.n)).unwrap();
-            decrypt(&mk[..16], nonce,ciphertext, &concat(header.n, &ad))
+            decrypt(&mk[..16], nonce,ciphertext, &concat(nonce,self.dh_id,header.n, &ad))
         } else {
             None
         }
@@ -396,39 +402,24 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
 }
 
 
-fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
-    let nonce_bytes = dhrnonce.to_be_bytes();
-    let mut front = nonce_bytes.to_vec();
-    front.extend(input);
-
-    front
-}
-fn split_dhr(input: Vec<u8>) -> DhPayload {
-
-    let nonce_val = ((input[0] as u16) << 8) | input[1] as u16;
-    let payload  =DhPayload {
-        pk : input[2..].to_vec(),
-        nonce : nonce_val
-    };
-
-    payload
-}
 
 pub struct Header {
     pub n: u16, // Message Number
     pub dh_pub_id:u16,
     pub ciphertext : Vec<u8>,
+    pub nonce : Vec<u8>
 }
 
 impl Header {
 
 
-    pub fn new( n: u16, dh_pub_id: u16, cipher: Vec<u8>) -> Self {
+    pub fn new( n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :Vec<u8>) -> Self {
         Header {
             n : n,
             dh_pub_id: dh_pub_id,
             ciphertext: cipher,
+            nonce: nonce
         }
     }
 
@@ -452,12 +443,3 @@ impl DhPayload {
 
 
     }
-/*
-#[cfg(test)]
-mod tests {
-    #[test]
-     fn skipmessage() {
-
-    }
-
-}*/

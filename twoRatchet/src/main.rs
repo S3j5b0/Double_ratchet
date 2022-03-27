@@ -35,7 +35,6 @@ fn main() {
 
 
 
-
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
 
     for n in 1..40 {
@@ -68,6 +67,7 @@ fn main() {
     // now I wants to ratchet again
 
    let newpk = i_ratchet.i_initiate_ratch();
+    println!("newpk {:?}", newpk.len());
 
    println!("newpk {}", newpk.len());
 
