@@ -72,10 +72,6 @@ impl state {
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
 
-        let first_dh_req = DhPayload{
-            pk : i_dh_public_key.as_bytes().to_vec(),
-            nonce : 1
-        };
 
     
 
@@ -112,9 +108,10 @@ impl state {
             pk : i_dh_public_key.as_bytes().to_vec(),
             nonce : self.dhr_res_nonce +1
         };
-        
 
         let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
+
+
         
         let enc = self.ratchet_encrypt(&concat_dhr, &self.ad_i.clone()).to_vec();
         let mut encoded = [5].to_vec();
@@ -235,7 +232,6 @@ impl state {
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
-        
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(&nonce, self.dh_id, self.ns, &ad)); // concat
 
 
@@ -260,7 +256,6 @@ impl state {
     }
     
     fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        println!("serialhdrlen Dec {:?}", &header.clone());
         let deserial_hdr =  unpack_header(header);
         
         
@@ -281,6 +276,7 @@ impl state {
                 let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
                 self.ckr = Some(ckr);
                 self.nr += 1;
+
                
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(&deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &ad));
                 out
