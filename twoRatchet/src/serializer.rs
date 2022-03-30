@@ -18,20 +18,23 @@ pub fn concat(nonce : &[u8],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {
 
 
 pub fn prepare_header(msg: Header) ->Vec<u8> {
-    let nbytes = msg.fcnt.to_be_bytes();
+    let fcnt_bytes = msg.fcnt.to_be_bytes();
+    let mut out = msg.nonce;
+    out.extend(fcnt_bytes);
     let dh_id_bytes = msg.dh_pub_id.to_be_bytes();
-    let mut front = [nbytes, dh_id_bytes].concat().to_vec();
-    front.extend(msg.nonce);
-    front.extend(msg.ciphertext);
-
-    front
+    out.extend(dh_id_bytes);
+    out.extend(msg.ciphertext);
+    println!("headerin {:?}", out);
+    out
 }
 pub fn unpack_header(encoded: Vec<u8>) ->Header {
-    let n = ((encoded[0] as u16) << 8) | encoded[1] as u16;
-    let dh_id = ((encoded[2] as u16) << 8) | encoded[3] as u16;
-    let nonce = &encoded[4..17];
+    println!("header out {:?}", encoded);
+    let nonce = &encoded[..13];
+    let fcnt = ((encoded[13] as u16) << 8) | encoded[14] as u16;
+    let dh_id = ((encoded[15] as u16) << 8) | encoded[16] as u16;
+    
     let cipher = &encoded[17..];
-    Header::new(  n,dh_id,cipher.to_vec(),nonce.to_vec())
+    Header::new(  fcnt,dh_id,cipher.to_vec(),nonce.to_vec())
 }
 pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
