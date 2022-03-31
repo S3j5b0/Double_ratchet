@@ -59,11 +59,6 @@ impl state {
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
     pub fn init_i(sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> Self {
 
-        let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
-        let i_dh_public_key = PublicKey::from(&i_dh_privkey);
-
-
-    
 
         let  state  = state {
             is_i: true,
@@ -74,8 +69,8 @@ impl state {
             ns: 0,
             nr: 0,
             mk_skipped: BTreeMap::new(),
-            tmp_pkey: Some(i_dh_public_key),
-            tmp_skey: Some(i_dh_privkey),
+            tmp_pkey: None,
+            tmp_skey: None,
             dhr_ack_nonce: 0,
             dhr_res_nonce: 0,
             dh_id: 0,
