@@ -1,7 +1,6 @@
 
 use x25519_dalek_ng::{self, SharedSecret,PublicKey, StaticSecret};
 use hkdf::Hkdf;
-use generic_array::{typenum::U32, GenericArray};
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
 use sha2::Sha256;
@@ -11,18 +10,16 @@ use super::{
     serializer::{concat,prepare_header,unpack_header,concat_dhr,split_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
-pub const MAX_SKIP: u16 = 200;
+
+
 pub struct state {
     pub is_i : bool,
-    dhs_priv: StaticSecret,
-    dhs_pub: PublicKey,
-    dhr_pub: Option<PublicKey>,
+    shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
-    pub cks: Option<[u8;32]>, // sending chain key
-    pub ckr: Option<[u8;32]>, // receiving chain key
+    pub sck: Option<[u8;32]>, // sending chain key
+    pub rck: Option<[u8;32]>, // receiving chain key
     pub ns: u16, // sending message numbering
     nr: u16, // receiving message numbering
-    pn: u16, // skipped messages from previous sending chain
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
@@ -31,8 +28,6 @@ pub struct state {
     dh_id : u16,
     ad_i : Vec<u8>,
     ad_r : Vec<u8>
-
-
 }
 
 impl state {
@@ -41,20 +36,15 @@ impl state {
 
     pub fn init_r(sk: [u8; 32], ckr: [u8; 32], sck: [u8; 32],  ad_i :Vec<u8>, ad_r:Vec<u8>) -> Self {
 
-
-        let r_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
-        let r_dh_public_key = PublicKey::from(&r_dh_privkey);
         state {
             is_i : false,
-            dhs_priv : r_dh_privkey,
-            dhs_pub : r_dh_public_key,
-            dhr_pub: None,
+
+            shared_secret : None,
             rk: sk,
-            cks: Some(sck),
-            ckr: Some(ckr),
+            sck: Some(sck),
+            rck: Some(ckr),
             ns: 0,
             nr: 0,
-            pn: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
@@ -67,7 +57,7 @@ impl state {
     }
 
     /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
-    pub fn init_i(sk: [u8; 32],  ckr: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> Self {
+    pub fn init_i(sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],ad_i :Vec<u8>,ad_r: Vec<u8>) -> Self {
 
         let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
@@ -75,17 +65,14 @@ impl state {
 
     
 
-        let mut state  = state {
+        let  state  = state {
             is_i: true,
-            dhs_priv : i_dh_privkey.clone(),
-            dhs_pub : i_dh_public_key,
-            dhr_pub: None,
+            shared_secret: None,
             rk: sk,
-            cks: Some(sck),
-            ckr: Some(ckr),
+            sck: Some(sck),
+            rck: Some(rck),
             ns: 0,
             nr: 0,
-            pn: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: Some(i_dh_public_key),
             tmp_skey: Some(i_dh_privkey),
@@ -104,10 +91,7 @@ impl state {
 
         self.tmp_pkey = Some(i_dh_public_key);
         self.tmp_skey = Some(i_dh_privkey);
-        let dh_req = DhPayload{
-            pk : i_dh_public_key.as_bytes().to_vec(),
-            nonce : self.dhr_res_nonce +1
-        };
+
 
         let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
 
@@ -123,9 +107,7 @@ impl state {
         // first, attempt to decrypt incoming key
         let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
                 Some(x) => x,
-                None => panic!("ahhrhrh"),
-            
-            
+                None => return None,
         };
         
         // first we deserialize dhr and create our own dhrackknowledgement message
@@ -143,10 +125,6 @@ impl state {
         
         self.dhr_ack_nonce += 1;
 
-        let dhr_ack_payload = DhPayload {
-            pk : r_dh_public_key.as_bytes().to_vec(),
-            nonce :self.dhr_ack_nonce,
-        };
         
         let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
         let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.ad_r.clone()).to_vec();
@@ -155,22 +133,20 @@ impl state {
         let mut encoded = [6].to_vec();
         encoded.extend(dhr_ack);
 
+        self.shared_secret = Some(*r_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
+
         // We then do the ratchet
-        let (rk, ckr) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key), &self.rk);
+        let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
-        let (rk, cks) = kdf_rk(r_dh_privkey.diffie_hellman(&i_dh_public_key),&rk);
+        let (rk, cks) = kdf_rk(self.shared_secret.unwrap(),&rk);
 
         self.dh_id += 1;
-        self.dhs_priv = r_dh_privkey;
-        self.dhs_pub = r_dh_public_key;
-        self.dhr_pub =  Some(i_dh_public_key);
+
         self.rk = rk;
-        self.cks =  Some(cks);
-        self.ckr =  Some(ckr);
-        self.pn= self.ns;
+        self.sck =  Some(cks);
+        self.rck =  Some(ckr);
         self.ns= 0;
         self.nr= 0;
-        
         self.mk_skipped =  BTreeMap::new();
 
         // return the key
@@ -183,8 +159,7 @@ impl state {
         
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
-                None => return false,
-            
+                None => return false, 
         };
         
         let dhr_ack = split_dhr(dhr_ack_serial);
@@ -199,24 +174,21 @@ impl state {
         // now that i has received an ack from r, she can use her temporary keys, and overwrite her old ones
 
         let i_dh_privkey = self.tmp_skey.clone().unwrap();
-        let i_dh_public_key = self.tmp_pkey.unwrap();
 
         // We then do the ratchet
 
+        self.shared_secret = Some(*i_dh_privkey.diffie_hellman(&r_dh_public_key).as_bytes());
 
-        let (rk, cks) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key), &self.rk);
+        let (rk, cks) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
-        let (rk, ckr) = kdf_rk(i_dh_privkey.diffie_hellman(&r_dh_public_key),&rk);
+        let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
 
 
         self.dh_id += 1;
-        self.dhs_priv = i_dh_privkey;
-        self.dhs_pub = i_dh_public_key;
-        self.dhr_pub =  Some(r_dh_public_key);
+
         self.rk = rk;
-        self.cks =  Some(cks);
-        self.ckr =  Some(ckr);
-        self.pn= self.ns;
+        self.sck =  Some(cks);
+        self.rck =  Some(ckr);
         self.ns= 0;
         self.nr= 0;
         
@@ -226,16 +198,13 @@ impl state {
 
 
     fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
-        let (cks, mk) = kdf_ck(&self.cks.unwrap());
-        self.cks = Some(cks);
+        let (cks, mk) = kdf_ck(&self.sck.unwrap());
+        self.sck = Some(cks);
                 
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(&nonce, self.dh_id, self.ns, &ad)); // concat
-
-
-
         let header = Header::new(  self.ns,self.dh_id,encrypted_data.clone(),nonce.to_vec());
  
         self.ns += 1;
@@ -266,18 +235,16 @@ impl state {
         };
         
         
-        let plaintext = self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, &deserial_hdr.nonce,&ad);
         
-        match plaintext  {
-            Some(d) => Some(d),
+        match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, &deserial_hdr.nonce,&ad)  {
+            Some(out) => Some(out),
             None => {
                 
                 self.skip_message_keys(deserial_hdr.fcnt);
-                let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
-                self.ckr = Some(ckr);
+                let (ckr, mk) = kdf_ck(&self.rck.unwrap());
+                self.rck = Some(ckr);
                 self.nr += 1;
 
-               
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(&deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &ad));
                 out
             }
@@ -286,33 +253,34 @@ impl state {
 
 
 
-    fn skip_message_keys(&mut self, until: u16) -> Result<(), &str> {
-        if self.nr + MAX_SKIP < until {
-            return Err("Skipped to many keys");
+    fn skip_message_keys(&mut self, until: u16)  {
+        // we will not accept more skips than 200;
+        if self.nr + 200 < until {
+            return 
         }
-        match self.ckr {
-            Some(d) => {
-                while self.nr  < until {
-                    let (ckr, mk) = kdf_ck(&self.ckr.unwrap());
-                    self.ckr = Some(ckr);
-                    self.mk_skipped.insert((self.dh_id, self.nr), mk);
-                    self.nr += 1
+        if self.rck == None {
+            return 
+        }
+            while self.nr  < until {
+                let (ckr, mk) = kdf_ck(&self.rck.unwrap());
+                self.rck = Some(ckr);
+                self.mk_skipped.insert((self.dh_id, self.nr), mk);
+                self.nr += 1
                 }
-                Ok(())
-            },
-            None => { Err("No Ckr set") }
+                return
         }
-    }
+    
 
     fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce: &[u8], ad: &[u8]) -> Option<Vec<u8>> {
-        if self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
+        match self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
+            true => {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.fcnt)).unwrap();
             decrypt(&mk[..16], nonce,ciphertext, &concat(nonce,self.dh_id,header.fcnt, &ad))
-        } else {
-            None
-        }
+            },
+            false => return None
+        } 
     }
  
     pub fn r_receive(&mut self,input: &[u8]) -> Option<(Vec<u8>,bool)>{
@@ -368,19 +336,13 @@ impl state {
 }
 
 
-fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
+fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {
     
     let mut output = [0u8; 64];
-    let salt = salt.as_bytes();
 
-    let h = Hkdf::<Sha256>::new(Some(salt),input);
+    let h = Hkdf::<Sha256>::new(Some(&salt),input);
 
-
-    let info = b"Whispertext";
-
-    h.expand(info, &mut output).unwrap();
-
-    
+    h.expand(b"ConstantIn", &mut output).unwrap();
 
     let (rk,ck) = output.split_at(32);
     
@@ -392,9 +354,8 @@ fn kdf_rk(salt: SharedSecret,  input: &[u8]) -> ([u8;32],[u8;32]) {
     // kdf_ck should have a constant 
     let salt = &[1;32];
     let h = Hkdf::<Sha256>::new(Some(salt),input);
-    let info = b"Whispertext";
 
-    h.expand(info, &mut output).unwrap();
+    h.expand(b"ConstantIn", &mut output).unwrap();
 
     let (rk,ck) = output.split_at(32);
 
@@ -439,7 +400,5 @@ impl DhPayload {
             nonce: nonce,
         }
     }
-
-
 
     }

@@ -8,7 +8,8 @@ edition = "2021"
 [dependencies]
 
 
-
+serde_json = "0.8"
+zeroize = "1.5.4"
 rand = "*"
 rand_core = { version = "0.6", features = ["getrandom"] }
 hkdf = "0.8.0"
