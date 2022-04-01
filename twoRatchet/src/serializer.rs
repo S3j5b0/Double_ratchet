@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use bytes::{BytesMut, BufMut};
 
 
 use super::{
@@ -20,25 +21,30 @@ pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> 
 }
 
 
-pub fn prepare_header(msg: PhyPayload) ->Vec<u8> {
-    let mut out = [msg.mtype].to_vec();
-    out.extend(msg.nonce);
-    let fcnt_bytes = msg.fcnt.to_be_bytes();
-    out.extend(fcnt_bytes);
-    let dh_id_bytes = msg.dh_pub_id.to_be_bytes();
-    out.extend(dh_id_bytes);
-    out.extend(msg.ciphertext);
-    out
+pub fn prepare_payload(msg: PhyPayload) ->Vec<u8> {
+    let mut buf = BytesMut::with_capacity(64);
+    buf.put_u8(msg.mtype);
+    buf.put_slice(&msg.nonce);
+    buf.put_slice(&msg.devaddr);
+    buf.put_u16(msg.fcnt);
+    buf.put_u16(msg.dh_pub_id);
+    buf.put_slice(&msg.ciphertext);
+
+    buf.to_vec()
 }
-pub fn unpack_header(encoded: Vec<u8>) ->PhyPayload {
+pub fn unpack_payload(encoded: Vec<u8>) ->PhyPayload {
     let mtype = encoded[0];
     let nonce :[u8;13]= encoded[1..14].try_into().unwrap();
     
-    let fcnt = ((encoded[14] as u16) << 8) | encoded[15] as u16;
-    let dh_id = ((encoded[16] as u16) << 8) | encoded[17] as u16;
+
+    let devaddr = &encoded[14..18];
     
-    let cipher = &encoded[18..];
-    PhyPayload::new(mtype,fcnt,dh_id,cipher.to_vec(),nonce)
+    let fcnt = ((encoded[18] as u16) << 8) | encoded[19] as u16;
+
+    let dh_id = ((encoded[20] as u16) << 8) | encoded[21] as u16;
+    let cipher = &encoded[22..];
+
+    PhyPayload::new(mtype,devaddr.to_vec(),fcnt,dh_id,cipher.to_vec(),nonce)
 }
 pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 

@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,RngCore};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{concat,prepare_header,unpack_header,concat_dhr,split_dhr}
+    serializer::{concat,prepare_payload,unpack_payload,concat_dhr,split_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
@@ -194,10 +194,10 @@ impl state {
         OsRng.fill_bytes(&mut nonce);
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
-        let header = PhyPayload::new(mtype,  self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
+        let header = PhyPayload::new(mtype, ad.to_vec(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_send += 1;
-        let hdr = prepare_header(header); // leaving out nonce, since it is a constant, as described bysignal docs
+        let hdr = prepare_payload(header); // leaving out nonce, since it is a constant, as described bysignal docs
         hdr
     }
 
@@ -213,8 +213,7 @@ impl state {
     }
     
     fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        let deserial_hdr =  unpack_header(header);
-        
+        let deserial_hdr =  unpack_payload(header);        
 
         
         
@@ -346,18 +345,21 @@ fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {
 
 pub struct PhyPayload {
     pub mtype : u8,
+    pub nonce : [u8;13],
+    pub devaddr : Vec<u8>,
     pub fcnt: u16, // Message Number
     pub dh_pub_id:u16,
     pub ciphertext : Vec<u8>,
-    pub nonce : [u8;13]
+    
 }
 
 impl PhyPayload {
 
 
-    pub fn new( mtype : u8,n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
+    pub fn new( mtype : u8,devaddr:Vec<u8>,n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
         PhyPayload {
             mtype: mtype,
+            devaddr:devaddr,
             fcnt : n,
             dh_pub_id: dh_pub_id,
             ciphertext: cipher,
