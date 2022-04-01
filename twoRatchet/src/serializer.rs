@@ -7,19 +7,23 @@ use super::{
     ratchfuncs::{Header,DhPayload }
 };
 /// Concat header with associated data
-pub fn concat(nonce : &[u8],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {
+pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {
     let dh_id_byt = dh_id.to_be_bytes();
-    let  n = n.to_be_bytes();
-    let mut out = [dh_id_byt,n].concat().to_vec();
-    out.extend(ad);
+    let n = n.to_be_bytes();
+    let mut out = [mtype].to_vec();
     out.extend(nonce);
+    out.extend(n);
+    out.extend(ad);
+    out.extend(dh_id_byt);
     out
+
 }
 
 
 pub fn prepare_header(msg: Header) ->Vec<u8> {
+    let mut out = [msg.mtype].to_vec();
+    out.extend(msg.nonce);
     let fcnt_bytes = msg.fcnt.to_be_bytes();
-    let mut out = msg.nonce;
     out.extend(fcnt_bytes);
     let dh_id_bytes = msg.dh_pub_id.to_be_bytes();
     out.extend(dh_id_bytes);
@@ -27,12 +31,14 @@ pub fn prepare_header(msg: Header) ->Vec<u8> {
     out
 }
 pub fn unpack_header(encoded: Vec<u8>) ->Header {
-    let nonce = &encoded[..13];
-    let fcnt = ((encoded[13] as u16) << 8) | encoded[14] as u16;
-    let dh_id = ((encoded[15] as u16) << 8) | encoded[16] as u16;
+    let mtype = encoded[0];
+    let nonce :[u8;13]= encoded[1..14].try_into().unwrap();
     
-    let cipher = &encoded[17..];
-    Header::new(fcnt,dh_id,cipher.to_vec(),nonce.to_vec())
+    let fcnt = ((encoded[14] as u16) << 8) | encoded[15] as u16;
+    let dh_id = ((encoded[16] as u16) << 8) | encoded[17] as u16;
+    
+    let cipher = &encoded[18..];
+    Header::new(mtype,fcnt,dh_id,cipher.to_vec(),nonce)
 }
 pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 

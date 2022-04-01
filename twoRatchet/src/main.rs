@@ -24,29 +24,28 @@ fn main() {
     let uplink = [218, 132, 151, 66, 151, 72, 196, 104, 152, 13, 117, 94, 224, 7, 231, 216, 62, 155, 135, 52, 59, 100, 217, 236, 115, 100, 161, 95, 8, 146, 123, 146];
     
     
-    let ad_r = &[1,2,3,2,2];
-    let ad_i = &[2,3,2,3,9];
+    let devaddr = &[1,2,3,2,2,6,7,8];
 
     // iFirst the two parties initialize, where I outputs her pk
 
-    let mut i_ratchet  = state::init_i(sk,downlink, uplink,ad_i.to_vec(), ad_r.to_vec());
+    let mut i_ratchet  = state::init_i(sk,downlink, uplink,devaddr.to_vec());
 
-    let mut r_ratchet = state::init_r(sk, uplink,downlink, ad_i.to_vec(), ad_r.to_vec());
+    let mut r_ratchet = state::init_r(sk, uplink,downlink, devaddr.to_vec());
 
 
 
 
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
-
+    
     for n in 1..40 {
-    let enclost = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
+    let enclost = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
 
     }
 
 
 
-    let enc0 = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
+    let enc0 = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
 
 
     let dec0 = match r_ratchet.r_receive(&enc0){
@@ -56,9 +55,8 @@ fn main() {
 
     assert_eq!(dec0, b"lost".to_vec());
 
-    let encr = r_ratchet.ratchet_encrypt_payload(&b"downlink".to_vec(), ad_r);
-
-
+    let encr = r_ratchet.ratchet_encrypt_payload(&b"downlink".to_vec(), devaddr);
+    println!("encr {:?}", encr.len());
     let decr = match i_ratchet.i_receive(encr){
         Some((x,b)) => x,
         None => [0].to_vec(), // do nothing
@@ -67,7 +65,6 @@ fn main() {
 
 
     // now I wants to ratchet again
-    println!("initiate");
    let newpk = i_ratchet.i_initiate_ratch();
     // R recevies dhr res
     let dh_ack = match  r_ratchet.r_receive(&newpk) {
@@ -77,8 +74,8 @@ fn main() {
     // and responds with a dhr ack, which i receives
     let _ratchdone =  i_ratchet.i_receive(dh_ack); 
 
-    let lostmsg = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), ad_i);
-    let msg3 = i_ratchet.ratchet_encrypt_payload(&b"msg3".to_vec(), ad_i);
+    let lostmsg = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
+    let msg3 = i_ratchet.ratchet_encrypt_payload(&b"msg3".to_vec(), devaddr);
 
 
     let dec0 = match r_ratchet.r_receive(&msg3){
@@ -87,6 +84,8 @@ fn main() {
     };
 
     assert_eq!(b"msg3".to_vec(),dec0);
+
+
     let declost = match r_ratchet.r_receive(&lostmsg){
         Some((x,b)) => x,
         None => [0].to_vec(),
