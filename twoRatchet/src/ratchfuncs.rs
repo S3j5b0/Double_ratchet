@@ -18,8 +18,8 @@ pub struct state {
     pub rk: [u8;32],
     pub sck: Option<[u8;32]>, // sending chain key
     pub rck: Option<[u8;32]>, // receiving chain key
-    pub ns: u16, // sending message numbering
-    nr: u16, // receiving message numbering
+    pub fcnt_rcv: u16, // sending message numbering
+    pub fcnt_send: u16, // receiving message numbering
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
@@ -42,8 +42,8 @@ impl state {
             rk: sk,
             sck: Some(sck),
             rck: Some(ckr),
-            ns: 0,
-            nr: 0,
+            fcnt_send: 0,
+            fcnt_rcv: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
@@ -64,8 +64,8 @@ impl state {
             rk: sk,
             sck: Some(sck),
             rck: Some(rck),
-            ns: 0,
-            nr: 0,
+            fcnt_send: 0,
+            fcnt_rcv: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
@@ -134,8 +134,8 @@ impl state {
         self.rk = rk;
         self.sck =  Some(cks);
         self.rck =  Some(ckr);
-        self.ns= 0;
-        self.nr= 0;
+        self.fcnt_send= 0;
+        self.fcnt_rcv= 0;
         self.mk_skipped =  BTreeMap::new();
 
         // return the key
@@ -178,8 +178,8 @@ impl state {
         self.rk = rk;
         self.sck =  Some(cks);
         self.rck =  Some(ckr);
-        self.ns= 0;
-        self.nr= 0;
+        self.fcnt_send= 0;
+        self.fcnt_rcv= 0;
         
         self.mk_skipped =  BTreeMap::new();
         true
@@ -193,10 +193,10 @@ impl state {
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
-        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.ns, &ad)); // concat
-        let header = Header::new(mtype,  self.ns,self.dh_id,encrypted_data.clone(),nonce);
+        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
+        let header = PhyPayload::new(mtype,  self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
-        self.ns += 1;
+        self.fcnt_send += 1;
         let hdr = prepare_header(header); // leaving out nonce, since it is a constant, as described bysignal docs
         hdr
     }
@@ -226,7 +226,7 @@ impl state {
                 self.skip_message_keys(deserial_hdr.fcnt);
                 let (ckr, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(ckr);
-                self.nr += 1;
+                self.fcnt_rcv += 1;
 
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &self.devaddr));
                 out
@@ -238,23 +238,23 @@ impl state {
 
     fn skip_message_keys(&mut self, until: u16)  {
         // we will not accept more skips than 200;
-        if self.nr + 200 < until {
+        if self.fcnt_rcv + 200 < until {
             return 
         }
         if self.rck == None {
             return 
         }
-            while self.nr  < until {
+            while self.fcnt_rcv  < until {
                 let (ckr, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(ckr);
-                self.mk_skipped.insert((self.dh_id, self.nr), mk);
-                self.nr += 1
+                self.mk_skipped.insert((self.dh_id, self.fcnt_rcv), mk);
+                self.fcnt_rcv += 1
                 }
                 return
         }
     
 
-    fn try_skipped_message_keys(&mut self, header: &Header, ciphertext: &[u8], nonce:[u8;13], ad: &[u8]) -> Option<Vec<u8>> {
+    fn try_skipped_message_keys(&mut self, header: &PhyPayload, ciphertext: &[u8], nonce:[u8;13], ad: &[u8]) -> Option<Vec<u8>> {
         match self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
             true => {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
@@ -344,7 +344,7 @@ fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {
 
 
 
-pub struct Header {
+pub struct PhyPayload {
     pub mtype : u8,
     pub fcnt: u16, // Message Number
     pub dh_pub_id:u16,
@@ -352,11 +352,11 @@ pub struct Header {
     pub nonce : [u8;13]
 }
 
-impl Header {
+impl PhyPayload {
 
 
     pub fn new( mtype : u8,n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
-        Header {
+        PhyPayload {
             mtype: mtype,
             fcnt : n,
             dh_pub_id: dh_pub_id,

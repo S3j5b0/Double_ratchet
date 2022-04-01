@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 
 use super::{
-    ratchfuncs::{Header,DhPayload }
+    ratchfuncs::{PhyPayload,DhPayload }
 };
 /// Concat header with associated data
 pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {

@@ -24,7 +24,7 @@ fn main() {
     let uplink = [218, 132, 151, 66, 151, 72, 196, 104, 152, 13, 117, 94, 224, 7, 231, 216, 62, 155, 135, 52, 59, 100, 217, 236, 115, 100, 161, 95, 8, 146, 123, 146];
     
     
-    let devaddr = &[1,2,3,2,2,6,7,8];
+    let devaddr = &[1,2,3,2];
 
     // iFirst the two parties initialize, where I outputs her pk
 
