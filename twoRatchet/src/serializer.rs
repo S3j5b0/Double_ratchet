@@ -20,7 +20,7 @@ pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> 
 }
 
 
-pub fn prepare_header(msg: Header) ->Vec<u8> {
+pub fn prepare_header(msg: PhyPayload) ->Vec<u8> {
     let mut out = [msg.mtype].to_vec();
     out.extend(msg.nonce);
     let fcnt_bytes = msg.fcnt.to_be_bytes();
@@ -30,7 +30,7 @@ pub fn prepare_header(msg: Header) ->Vec<u8> {
     out.extend(msg.ciphertext);
     out
 }
-pub fn unpack_header(encoded: Vec<u8>) ->Header {
+pub fn unpack_header(encoded: Vec<u8>) ->PhyPayload {
     let mtype = encoded[0];
     let nonce :[u8;13]= encoded[1..14].try_into().unwrap();
     
@@ -38,7 +38,7 @@ pub fn unpack_header(encoded: Vec<u8>) ->Header {
     let dh_id = ((encoded[16] as u16) << 8) | encoded[17] as u16;
     
     let cipher = &encoded[18..];
-    Header::new(mtype,fcnt,dh_id,cipher.to_vec(),nonce)
+    PhyPayload::new(mtype,fcnt,dh_id,cipher.to_vec(),nonce)
 }
 pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
