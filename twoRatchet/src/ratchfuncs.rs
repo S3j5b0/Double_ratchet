@@ -7,7 +7,8 @@ use sha2::Sha256;
 use rand_core::{OsRng,RngCore};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{concat,prepare_payload,unpack_payload,prepare_dhr,unpack_dhr}
+    serializer::{concat,prepare_dhr,unpack_dhr},
+    phypayload::{PhyPayload, deserialize}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
@@ -201,11 +202,18 @@ impl state {
 
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
+        println!("mtype {},", mtype);
+        println!("devaddr {:?},", ad.to_vec());
+        println!("fcnt {:?}" ,self.fcnt_send);
+        println!("dhid {}", self.dh_id);
+        println!("cipher {:?}", encrypted_data);
+        println!("nonce {:?}", nonce);
         
-        let header = PhyPayload::new(mtype, ad.to_vec(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
+        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_send += 1;
-        let hdr = prepare_payload(header); // leaving out nonce, since it is a constant, as described bysignal docs
+        let hdr = header.serialize(); // leaving out nonce, since it is a constant, as described bysignal docs
+        println!("full thing {:?}", hdr);
         hdr
     }
 
@@ -221,10 +229,14 @@ impl state {
     }
     
     fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        let deserial_hdr =  match unpack_payload(header) {
+        let deserial_hdr =  match deserialize(&header) {
             Some(hdr) => hdr,
             None => return None
         };
+        println!("_ cipher {:?}", deserial_hdr.ciphertext);
+        println!("_ nocne {:?}", deserial_hdr.nonce);
+        println!("_ devaddr {:?}", deserial_hdr.devaddr);
+        
 
         match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, deserial_hdr.nonce,&self.devaddr.clone())  {
             Some(out) => Some(out),
@@ -350,32 +362,6 @@ fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {
 
 
 
-pub struct PhyPayload {
-    pub mtype : u8,
-    pub nonce : [u8;13],
-    pub devaddr : Vec<u8>,
-    pub fcnt: u16, // Message Number
-    pub dh_pub_id:u16,
-    pub ciphertext : Vec<u8>,
-    
-}
-
-impl PhyPayload {
-
-
-    pub fn new( mtype : u8,devaddr:Vec<u8>,n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
-        PhyPayload {
-            mtype: mtype,
-            devaddr:devaddr,
-            fcnt : n,
-            dh_pub_id: dh_pub_id,
-            ciphertext: cipher,
-            nonce: nonce
-        }
-    }
-
-
-}
 
 pub struct DhPayload {
     pub pk: Vec<u8>, // public key that is sent

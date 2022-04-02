@@ -5,7 +5,7 @@ use bytes::{BytesMut, BufMut};
 
 
 use super::{
-    ratchfuncs::{PhyPayload,DhPayload }
+    ratchfuncs::{DhPayload }
 };
 /// Concat header with associated data
 pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> {
@@ -20,7 +20,7 @@ pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, ad:&[u8]) ->Vec<u8> 
 
 }
 
-
+/*
 pub fn prepare_payload(msg: PhyPayload) ->Vec<u8> {
     let mut buf = BytesMut::with_capacity(64);
     buf.put_u8(msg.mtype);
@@ -49,7 +49,7 @@ pub fn unpack_payload(encoded: Vec<u8>) ->Option<PhyPayload> {
     let cipher = &encoded[22..];
 
     Some(PhyPayload::new(mtype,devaddr.to_vec(),fcnt,dh_id,cipher.to_vec(),nonce))
-}
+}*/
 pub fn prepare_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
     let nonce_bytes = dhrnonce.to_be_bytes();

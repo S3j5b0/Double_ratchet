@@ -38,11 +38,11 @@ fn main() {
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
     
-    for n in 1..40 {
+   /* for n in 1..40 {
     let enclost = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
 
     }
-
+*/
 
 
     let enc0 = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
