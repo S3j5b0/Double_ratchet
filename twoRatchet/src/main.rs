@@ -62,7 +62,7 @@ fn main() {
     };
 
 
-
+    let oldenc = i_ratchet.ratchet_encrypt_payload(&b"veryold".to_vec(), devaddr);
     // now I wants to ratchet again
    let newpk = i_ratchet.i_initiate_ratch();
     // R recevies dhr res
@@ -72,6 +72,15 @@ fn main() {
     }; 
     // and responds with a dhr ack, which i receives
     let _ratchdone =  i_ratchet.i_receive(dh_ack); 
+
+
+    let decold = match r_ratchet.r_receive(&oldenc){
+        Some((x,b)) => println!("decrpyted successfully"),
+        None => print!("did not decrpyt old message"),
+    };
+
+
+
 
     let lostmsg = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
     let msg3 = i_ratchet.ratchet_encrypt_payload(&b"msg3".to_vec(), devaddr);

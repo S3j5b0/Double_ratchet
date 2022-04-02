@@ -34,7 +34,7 @@ pub fn prepare_payload(msg: PhyPayload) ->Vec<u8> {
 }
 pub fn unpack_payload(encoded: Vec<u8>) ->Option<PhyPayload> {
 
-    if (encoded.len() < 22){
+    if encoded.len() < 22{
         return None
     }
     let mtype = encoded[0];
@@ -59,7 +59,7 @@ pub fn prepare_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
     front
 }
 pub fn unpack_dhr(input: Vec<u8>) -> Option<DhPayload> {
-    if (input.len() != 34){
+    if input.len() != 34{
         return None
     }
 

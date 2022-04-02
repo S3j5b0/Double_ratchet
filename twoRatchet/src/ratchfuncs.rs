@@ -130,15 +130,16 @@ impl state {
         let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
         let (rk, cks) = kdf_rk(self.shared_secret.unwrap(),&rk);
-
+        self.skip_message_keys(10);
         self.dh_id += 1;
+
+        assert_eq!(self.dhr_ack_nonce ,self.dh_id);
 
         self.rk = rk;
         self.sck =  Some(cks);
         self.rck =  Some(ckr);
         self.fcnt_send= 0;
         self.fcnt_rcv= 0;
-        self.mk_skipped =  BTreeMap::new();
 
         // return the key
         Some(dhr_ack) 
@@ -177,6 +178,7 @@ impl state {
         
         let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
 
+        self.skip_message_keys(10);
 
         self.dh_id += 1;
 
@@ -186,7 +188,6 @@ impl state {
         self.fcnt_send= 0;
         self.fcnt_rcv= 0;
         
-        self.mk_skipped =  BTreeMap::new();
         true
     }
 
@@ -197,6 +198,7 @@ impl state {
                 
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
+
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
         
@@ -224,18 +226,14 @@ impl state {
             None => return None
         };
 
-        
-        
-        
         match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, deserial_hdr.nonce,&self.devaddr.clone())  {
             Some(out) => Some(out),
             None => {
-                
+
                 self.skip_message_keys(deserial_hdr.fcnt);
                 let (ckr, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(ckr);
                 self.fcnt_rcv += 1;
-
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &self.devaddr));
                 out
             }
@@ -252,7 +250,7 @@ impl state {
         if self.rck == None {
             return 
         }
-            while self.fcnt_rcv  < until {
+           while self.fcnt_rcv  < until {
                 let (ckr, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(ckr);
                 self.mk_skipped.insert((self.dh_id, self.fcnt_rcv), mk);
@@ -268,7 +266,7 @@ impl state {
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.fcnt)).unwrap();
-            decrypt(&mk[..16], &nonce,ciphertext, &concat(header.mtype,nonce,self.dh_id,header.fcnt, &ad))
+            decrypt(&mk[..16], &nonce,ciphertext, &concat(header.mtype,nonce,header.dh_pub_id,header.fcnt, &ad))
             },
             false => return None
         } 
