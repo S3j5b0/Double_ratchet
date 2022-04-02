@@ -32,7 +32,11 @@ pub fn prepare_payload(msg: PhyPayload) ->Vec<u8> {
 
     buf.to_vec()
 }
-pub fn unpack_payload(encoded: Vec<u8>) ->PhyPayload {
+pub fn unpack_payload(encoded: Vec<u8>) ->Option<PhyPayload> {
+
+    if (encoded.len() < 22){
+        return None
+    }
     let mtype = encoded[0];
     let nonce :[u8;13]= encoded[1..14].try_into().unwrap();
     
@@ -44,9 +48,9 @@ pub fn unpack_payload(encoded: Vec<u8>) ->PhyPayload {
     let dh_id = ((encoded[20] as u16) << 8) | encoded[21] as u16;
     let cipher = &encoded[22..];
 
-    PhyPayload::new(mtype,devaddr.to_vec(),fcnt,dh_id,cipher.to_vec(),nonce)
+    Some(PhyPayload::new(mtype,devaddr.to_vec(),fcnt,dh_id,cipher.to_vec(),nonce))
 }
-pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
+pub fn prepare_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
     let nonce_bytes = dhrnonce.to_be_bytes();
     let mut front = nonce_bytes.to_vec();
@@ -54,7 +58,10 @@ pub fn concat_dhr(input: &[u8], dhrnonce: u16) -> Vec<u8> {
 
     front
 }
-pub fn split_dhr(input: Vec<u8>) -> DhPayload {
+pub fn unpack_dhr(input: Vec<u8>) -> Option<DhPayload> {
+    if (input.len() != 34){
+        return None
+    }
 
     let nonce_val = ((input[0] as u16) << 8) | input[1] as u16;
     let payload  =DhPayload {
@@ -62,6 +69,6 @@ pub fn split_dhr(input: Vec<u8>) -> DhPayload {
         nonce : nonce_val
     };
 
-    payload
+    Some(payload)
 }
 

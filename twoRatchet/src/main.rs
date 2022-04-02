@@ -56,7 +56,6 @@ fn main() {
     assert_eq!(dec0, b"lost".to_vec());
 
     let encr = r_ratchet.ratchet_encrypt_payload(&b"downlink".to_vec(), devaddr);
-    println!("encr {:?}", encr.len());
     let decr = match i_ratchet.i_receive(encr){
         Some((x,b)) => x,
         None => [0].to_vec(), // do nothing

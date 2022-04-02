@@ -7,7 +7,7 @@ use sha2::Sha256;
 use rand_core::{OsRng,RngCore};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{concat,prepare_payload,unpack_payload,concat_dhr,split_dhr}
+    serializer::{concat,prepare_payload,unpack_payload,prepare_dhr,unpack_dhr}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
@@ -85,9 +85,7 @@ impl state {
         self.tmp_skey = Some(i_dh_privkey);
 
 
-        let concat_dhr = concat_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
-
-
+        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
         
         let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
         enc
@@ -101,7 +99,11 @@ impl state {
         };
         
         // first we deserialize dhr and create our own dhrackknowledgement message
-        let dhr_req = split_dhr(dhr_serial);
+        let dhr_req = match unpack_dhr(dhr_serial){
+            Some(dhr) => dhr,
+            None => return None,
+        };
+
         self.dhr_res_nonce = dhr_req.nonce;
 
         let mut buf = [0; 32];
@@ -116,7 +118,7 @@ impl state {
         self.dhr_ack_nonce += 1;
 
         
-        let concat_dhr = concat_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
+        let concat_dhr = prepare_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
         let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),6).to_vec();
             
         
@@ -151,7 +153,10 @@ impl state {
                 None => return false, 
         };
         
-        let dhr_ack = split_dhr(dhr_ack_serial);
+        let dhr_ack = match unpack_dhr(dhr_ack_serial) {
+            Some(dhr) => dhr,
+            None => return false,
+        };
 
         // creating keys
         let mut buf = [0; 32];
@@ -194,6 +199,7 @@ impl state {
         OsRng.fill_bytes(&mut nonce);
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
+        
         let header = PhyPayload::new(mtype, ad.to_vec(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_send += 1;
@@ -213,7 +219,10 @@ impl state {
     }
     
     fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        let deserial_hdr =  unpack_payload(header);        
+        let deserial_hdr =  match unpack_payload(header) {
+            Some(hdr) => hdr,
+            None => return None
+        };
 
         
         
