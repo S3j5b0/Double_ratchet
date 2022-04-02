@@ -3,7 +3,7 @@ use x25519_dalek_ng::{PublicKey,StaticSecret, SharedSecret};
 use rand_core::{OsRng,};
 
 use twoRatchet::ratchfuncs::{state};
-
+use twoRatchet::serializer::{concat};
 use ccm::{
     aead::{generic_array::GenericArray, Aead, NewAead, Payload},
     consts::{U13, U8},
@@ -11,6 +11,8 @@ use ccm::{
 };
 
 fn main() {
+
+
     //// TODO:
     /// make error handling for aead decrpyiton
 
@@ -22,45 +24,39 @@ fn main() {
     let uplink = [218, 132, 151, 66, 151, 72, 196, 104, 152, 13, 117, 94, 224, 7, 231, 216, 62, 155, 135, 52, 59, 100, 217, 236, 115, 100, 161, 95, 8, 146, 123, 146];
     
     
-    let ad_r = &[1];
-    let ad_i = &[2];
+    let devaddr = &[1,2,3,2];
 
     // iFirst the two parties initialize, where I outputs her pk
 
-    let(mut i_ratchet, dhr_req)  = state::init_i(sk,downlink, uplink,ad_i.to_vec(), ad_r.to_vec());
+    let mut i_ratchet  = state::init_i(sk,downlink, uplink,devaddr.to_vec());
 
-    let mut r_ratchet = state::init_r(sk, uplink,downlink, ad_i.to_vec(), ad_r.to_vec());
+    let mut r_ratchet = state::init_r(sk, uplink,downlink, devaddr.to_vec());
 
 
-
-    // r recevies the pk of i, ratcets, and sends it's own pk
-/*
-    let newout = match  r_ratchet.r_receive(dhr_req) {
-        Some((x,b)) => x,
-        None => [0].to_vec(), // in this case, do nothing
-    };
-
-    // i receives the pk of r, and makes it's own ratchet
-    let _ratchdone =  i_ratchet.i_receive(newout); 
 
 
 
     // Now we are both fully initialized with a ratchet, and I should be able to encrypt something
-    let enclost = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-*/
-    let enc0 = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
+    
+    for n in 1..40 {
+    let enclost = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
+
+    }
 
 
-    let dec0 = match r_ratchet.r_receive(enc0){
+
+    let enc0 = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
+
+
+    let dec0 = match r_ratchet.r_receive(&enc0){
         Some((x,b)) => x,
         None => [0].to_vec(),
     };
 
     assert_eq!(dec0, b"lost".to_vec());
 
-    let encr = r_ratchet.ratchet_encrypt(&b"downlink".to_vec(), ad_r);
-
-
+    let encr = r_ratchet.ratchet_encrypt_payload(&b"downlink".to_vec(), devaddr);
+    println!("encr {:?}", encr.len());
     let decr = match i_ratchet.i_receive(encr){
         Some((x,b)) => x,
         None => [0].to_vec(), // do nothing
@@ -69,28 +65,28 @@ fn main() {
 
 
     // now I wants to ratchet again
-
    let newpk = i_ratchet.i_initiate_ratch();
-
     // R recevies dhr res
-    let dh_ack = match  r_ratchet.r_receive(newpk) {
+    let dh_ack = match  r_ratchet.r_receive(&newpk) {
         Some((x,b)) => x,
         None => [0].to_vec(), // in this case, do nothing
     }; 
     // and responds with a dhr ack, which i receives
     let _ratchdone =  i_ratchet.i_receive(dh_ack); 
 
-    let lostmsg = i_ratchet.ratchet_encrypt(&b"lost".to_vec(), ad_i);
-    let msg3 = i_ratchet.ratchet_encrypt(&b"msg3".to_vec(), ad_i);
+    let lostmsg = i_ratchet.ratchet_encrypt_payload(&b"lost".to_vec(), devaddr);
+    let msg3 = i_ratchet.ratchet_encrypt_payload(&b"msg3".to_vec(), devaddr);
 
 
-    let dec0 = match r_ratchet.r_receive(msg3){
+    let dec0 = match r_ratchet.r_receive(&msg3){
         Some((x,b)) => x,
         None => [0].to_vec(),
     };
 
     assert_eq!(b"msg3".to_vec(),dec0);
-    let declost = match r_ratchet.r_receive(lostmsg){
+
+
+    let declost = match r_ratchet.r_receive(&lostmsg){
         Some((x,b)) => x,
         None => [0].to_vec(),
     };

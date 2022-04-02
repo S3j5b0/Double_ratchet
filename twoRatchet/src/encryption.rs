@@ -4,6 +4,7 @@ use ccm::{
     consts::{U13, U8},
     Ccm,
 };
+use alloc::vec::Vec;
 
 pub fn encrypt(
     key: &[u8],
@@ -46,13 +47,11 @@ pub fn decrypt(
             aad: ad,
             msg: ciphertext,
         },
-    ).unwrap_or([44].to_vec());
+    );
 
-    if dst_out_pt != [44].to_vec() {
-   
-    Some(dst_out_pt)
-}
-    else{
-    None
+    match dst_out_pt {
+        Ok(x) => Some(x),
+        _ => None,
     }
+    
 }
