@@ -1,5 +1,5 @@
 
-use x25519_dalek_ng::{self, SharedSecret,PublicKey, StaticSecret};
+use x25519_dalek_ng::{self,PublicKey, StaticSecret};
 use hkdf::Hkdf;
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
@@ -15,7 +15,7 @@ pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
 pub struct state {
     pub is_i : bool,
-    shared_secret : Option<[u8;32]>,
+    pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
     pub sck: Option<[u8;32]>, // sending chain key
     pub rck: Option<[u8;32]>, // receiving chain key
@@ -26,7 +26,7 @@ pub struct state {
     tmp_skey : Option<StaticSecret>,
     dhr_ack_nonce : u16,
     dhr_res_nonce : u16,
-    dh_id : u16,
+    pub dh_id : u16,
     devaddr : Vec<u8>,
 }
 
@@ -99,7 +99,7 @@ impl state {
                 None => return None,
         };
         
-        // first we deserialize dhr and create our own dhrackknowledgement message
+        // then we deserialize dhr and create our own dhrackknowledgement message
         let dhr_req = match unpack_dhr(dhr_serial){
             Some(dhr) => dhr,
             None => return None,
@@ -128,17 +128,20 @@ impl state {
         self.shared_secret = Some(*r_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
 
         // We then do the ratchet
-        let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
+        let (rk, rck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
-        let (rk, cks) = kdf_rk(self.shared_secret.unwrap(),&rk);
-        self.skip_message_keys(10);
+        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
+        if (self.mk_skipped.len() > 500) {
+            self.mk_skipped.clear();
+        }
+        self.skip_message_keys(20);
         self.dh_id += 1;
 
         assert_eq!(self.dhr_ack_nonce ,self.dh_id);
 
         self.rk = rk;
-        self.sck =  Some(cks);
-        self.rck =  Some(ckr);
+        self.sck =  Some(sck);
+        self.rck =  Some(rck);
         self.fcnt_send= 0;
         self.fcnt_rcv= 0;
 
@@ -178,8 +181,12 @@ impl state {
         let (rk, cks) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
         let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
-
-        self.skip_message_keys(10);
+        self.mk_skipped =  BTreeMap::new();
+        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
+        if (self.mk_skipped.len() > 500) {
+            self.mk_skipped.clear();
+        }
+        self.skip_message_keys(1000);
 
         self.dh_id += 1;
 
@@ -200,20 +207,13 @@ impl state {
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
-
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
-        println!("mtype {},", mtype);
-        println!("devaddr {:?},", ad.to_vec());
-        println!("fcnt {:?}" ,self.fcnt_send);
-        println!("dhid {}", self.dh_id);
-        println!("cipher {:?}", encrypted_data);
-        println!("nonce {:?}", nonce);
+
         
         let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_send += 1;
-        let hdr = header.serialize(); // leaving out nonce, since it is a constant, as described bysignal docs
-        println!("full thing {:?}", hdr);
+        let hdr = header.serialize(); 
         hdr
     }
 
@@ -233,9 +233,7 @@ impl state {
             Some(hdr) => hdr,
             None => return None
         };
-        println!("_ cipher {:?}", deserial_hdr.ciphertext);
-        println!("_ nocne {:?}", deserial_hdr.nonce);
-        println!("_ devaddr {:?}", deserial_hdr.devaddr);
+
         
 
         match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, deserial_hdr.nonce,&self.devaddr.clone())  {
@@ -256,9 +254,7 @@ impl state {
 
     fn skip_message_keys(&mut self, until: u16)  {
         // we will not accept more skips than 200;
-        if self.fcnt_rcv + 200 < until {
-            return 
-        }
+
         if self.rck == None {
             return 
         }
@@ -284,12 +280,12 @@ impl state {
         } 
     }
  
-    pub fn r_receive(&mut self,input: &[u8]) -> Option<(Vec<u8>,bool)>{
+    pub fn r_receive(&mut self,input: Vec<u8>) -> Option<(Vec<u8>,bool)>{
 
         
         match input[0] {
             5 => {
-                match self.ratchet_r(input.to_vec()) {
+                match self.ratchet_r(input) {
                     Some(x) => return {
                         Some((x,true))},
                     None => return None,
@@ -297,7 +293,7 @@ impl state {
             },
             7 => {
                 
-                match self.ratchet_decrypt(input.to_vec()){
+                match self.ratchet_decrypt(input){
                     Some(x) => return Some((x,false)),
                     None => return None
                 }
