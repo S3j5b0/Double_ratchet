@@ -131,8 +131,8 @@ impl state {
         let (rk, rck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
         let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
-        if (self.mk_skipped.len() > 500) {
-            self.mk_skipped.clear();
+        if self.mk_skipped.len() > 500 {
+            self.prune_mkskipped();
         }
         self.skip_message_keys(20);
         self.dh_id += 1;
@@ -182,8 +182,7 @@ impl state {
         
         let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
         self.mk_skipped =  BTreeMap::new();
-        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
-        if (self.mk_skipped.len() > 500) {
+        if self.mk_skipped.len() > 500 {
             self.mk_skipped.clear();
         }
         self.skip_message_keys(1000);
@@ -248,6 +247,9 @@ impl state {
                 out
             }
         }
+
+    
+
     }
 
 
@@ -278,6 +280,14 @@ impl state {
             },
             false => return None
         } 
+    }
+
+    fn prune_mkskipped(&mut self) {
+        let n = self.mk_skipped.keys().next().map(|v| v.0).unwrap();
+        self.mk_skipped.retain(|key, _| {
+            key.0 != n
+        });
+        
     }
  
     pub fn r_receive(&mut self,input: Vec<u8>) -> Option<(Vec<u8>,bool)>{
@@ -358,19 +368,3 @@ fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {
 
 
 
-
-pub struct DhPayload {
-    pub pk: Vec<u8>, // public key that is sent
-    pub nonce : u16, // DHRAckNonce, or DHRResNonce
-}
-impl DhPayload {
-
-
-    pub fn new( pk : Vec<u8>, nonce : u16) -> Self {
-        DhPayload {
-            pk: pk,
-            nonce: nonce,
-        }
-    }
-
-    }

@@ -5,11 +5,10 @@ use alloc::vec::Vec;
 pub struct PhyPayload {
     pub mtype: u8,
     pub nonce: [u8; 13],
-    pub fcnt: u16, // Message Number
+    pub fcnt: u16, 
     pub devaddr : [u8;4],
     pub dh_pub_id: u16,
     pub ciphertext: Vec<u8>,
-    
 }
 
 impl PhyPayload {
@@ -36,7 +35,7 @@ impl PhyPayload {
             
         } = self;
 
-        let mut buffer = Vec::new();
+        let mut buffer = Vec::with_capacity(22+ciphertext.len());
 
         buffer.extend_from_slice(&mtype.to_be_bytes());
         buffer.extend_from_slice(nonce);
