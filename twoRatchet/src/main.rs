@@ -1,6 +1,6 @@
 
 
-use twoRatchet::ratchfuncs::{state};
+use twoRatchet::ratchfuncs::{State};
 extern crate alloc;
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
@@ -13,7 +13,10 @@ fn main() {
 
     let mut map: BTreeMap<(u16,u16), [u8;32]> = BTreeMap::new();
     
+    let n : u16 = 10;
+    let h : u16 = 16;
 
+    let bb: Vec<u8> = [n.to_be_bytes(), h.to_be_bytes()].concat();
 
 
 
@@ -27,9 +30,9 @@ fn main() {
 
     // iFirst the two parties initialize, where I outputs her pk
 
-    let mut i_ratchet  = state::init_i(sk,downlink, uplink,devaddr.to_vec());
+    let mut i_ratchet  = State::init_i(sk,downlink, uplink,devaddr.to_vec());
 
-    let mut r_ratchet = state::init_r(sk, uplink,downlink, devaddr.to_vec());
+    let mut r_ratchet = State::init_r(sk, uplink,downlink, devaddr.to_vec());
 
 
 

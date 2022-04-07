@@ -10,7 +10,7 @@ extern crate alloc;
 
 pub mod ratchfuncs;
 pub mod encryption;
-pub mod serializer;
+pub mod dhr;
 pub mod phypayload;
   
 

@@ -7,13 +7,13 @@ use sha2::Sha256;
 use rand_core::{OsRng,RngCore};
 use super::{
     encryption::{encrypt,decrypt},
-    serializer::{concat,prepare_dhr,unpack_dhr},
+    dhr::{concat,prepare_dhr,unpack_dhr},
     phypayload::{PhyPayload, deserialize}
 };
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
 
-pub struct state {
+pub struct State {
     pub is_i : bool,
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
@@ -30,19 +30,18 @@ pub struct state {
     devaddr : Vec<u8>,
 }
 
-impl state {
+impl State {
 
 
 
-    pub fn init_r(sk: [u8; 32], ckr: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>) -> Self {
+    pub fn init_r(sk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>) -> Self {
 
-        state {
+        State {
             is_i : false,
-
             shared_secret : None,
             rk: sk,
             sck: Some(sck),
-            rck: Some(ckr),
+            rck: Some(rck),
             fcnt_send: 0,
             fcnt_rcv: 0,
             mk_skipped: BTreeMap::new(),
@@ -55,11 +54,9 @@ impl state {
         }
     }
 
-    /// Init Ratchet without other [PublicKey]. Initialized first. Returns [Ratchet] and [PublicKey].
     pub fn init_i(sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>) -> Self {
 
-
-        let  state  = state {
+        let  state  = State {
             is_i: true,
             shared_secret: None,
             rk: sk,
@@ -91,7 +88,7 @@ impl state {
         let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
         enc
     }
-    pub fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
+    fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
 
         // first, attempt to decrypt incoming key
         let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
@@ -150,7 +147,7 @@ impl state {
         
     }
 
-    pub fn ratchet_i(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
+     fn ratchet_i(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
 
         
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
@@ -337,6 +334,9 @@ impl state {
     }
 
 }
+
+
+
 
 
 fn kdf_rk(salt: [u8;32],  input: &[u8]) -> ([u8;32],[u8;32]) {

@@ -6,14 +6,12 @@ use alloc::vec::Vec;
 
 /// Concat header with associated data
 pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:&[u8]) ->Vec<u8> {
-    let dh_id_byt = dh_id.to_be_bytes();
-    let n = n.to_be_bytes();
-    let mut out = [mtype].to_vec();
-    out.extend(nonce);
-    out.extend(n);
-    out.extend(devaddr);
-    out.extend(dh_id_byt);
-    out
+    let mut buffer : Vec<u8> = Vec::with_capacity(17+devaddr.len());
+    buffer.extend_from_slice(devaddr);
+    buffer.extend_from_slice(&[mtype]);
+    buffer.extend_from_slice(&nonce);
+    buffer.extend([n.to_be_bytes(), dh_id.to_be_bytes()].concat().to_vec());
+    buffer
 
 }
 
