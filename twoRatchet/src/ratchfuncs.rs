@@ -24,6 +24,7 @@ pub struct State {
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
+    tmp_shared_secret : Option<[u8;32]>,
     dhr_ack_nonce : u16,
     dhr_res_nonce : u16,
     pub dh_id : u16,
@@ -47,6 +48,7 @@ impl State {
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
+            tmp_shared_secret:None,
             dhr_ack_nonce: 0,
             dhr_res_nonce: 0,
             dh_id: 0,
@@ -67,6 +69,7 @@ impl State {
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
+            tmp_shared_secret: None,
             dhr_ack_nonce: 0,
             dhr_res_nonce: 0,
             dh_id: 0,
@@ -82,12 +85,14 @@ impl State {
         self.tmp_pkey = Some(i_dh_public_key);
         self.tmp_skey = Some(i_dh_privkey);
 
-
-        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce+1);
+        self.dhr_res_nonce += 1;
+        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce);
         
         let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
         enc
     }
+
+
     fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
 
         // first, attempt to decrypt incoming key
@@ -119,12 +124,16 @@ impl State {
         let concat_dhr = prepare_dhr(&r_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
         let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),6).to_vec();
             
+
+
+        self.tmp_shared_secret = Some(*r_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
+
+        Some(dhr_ack) 
         
-
-
-        self.shared_secret = Some(*r_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
-
-        // We then do the ratchet
+    }
+    fn finalize_ratchet_r(&mut self)   {
+        self.shared_secret = self.tmp_shared_secret;
+        
         let (rk, rck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
         let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
@@ -134,7 +143,6 @@ impl State {
         self.skip_message_keys(20);
         self.dh_id += 1;
 
-        assert_eq!(self.dhr_ack_nonce ,self.dh_id);
 
         self.rk = rk;
         self.sck =  Some(sck);
@@ -142,23 +150,24 @@ impl State {
         self.fcnt_send= 0;
         self.fcnt_rcv= 0;
 
-        // return the key
-        Some(dhr_ack) 
-        
-    }
 
+    }
      fn ratchet_i(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
 
         
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
-                None => return false, 
+                None => {
+                    return false}, 
         };
         
         let dhr_ack = match unpack_dhr(dhr_ack_serial) {
             Some(dhr) => dhr,
-            None => return false,
+            None => {return false},
         };
+        if self.dhr_res_nonce != dhr_ack.nonce{
+            return false;
+        }
 
         // creating keys
         let mut buf = [0; 32];
@@ -170,7 +179,6 @@ impl State {
         // now that i has received an ack from r, she can use her temporary keys, and overwrite her old ones
 
         let i_dh_privkey = self.tmp_skey.clone().unwrap();
-
         // We then do the ratchet
 
         self.shared_secret = Some(*i_dh_privkey.diffie_hellman(&r_dh_public_key).as_bytes());
@@ -178,6 +186,8 @@ impl State {
         let (rk, cks) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
         let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
+
+
         self.mk_skipped =  BTreeMap::new();
         if self.mk_skipped.len() > 500 {
             self.mk_skipped.clear();
@@ -203,9 +213,13 @@ impl State {
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
+
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
 
-        
+
+
+
+
         let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_send += 1;
@@ -225,22 +239,31 @@ impl State {
     }
     
     fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
+
+
         let deserial_hdr =  match deserialize(&header) {
             Some(hdr) => hdr,
             None => return None
         };
 
-        
+        if !self.is_i && self.dh_id < deserial_hdr.dh_pub_id {
+
+            self.finalize_ratchet_r();
+        }        
 
         match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, deserial_hdr.nonce,&self.devaddr.clone())  {
             Some(out) => Some(out),
             None => {
 
                 self.skip_message_keys(deserial_hdr.fcnt);
-                let (ckr, mk) = kdf_ck(&self.rck.unwrap());
-                self.rck = Some(ckr);
+                let (rck, mk) = kdf_ck(&self.rck.unwrap());
+                self.rck = Some(rck);
                 self.fcnt_rcv += 1;
-                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,self.dh_id,deserial_hdr.fcnt, &self.devaddr));
+
+                
+                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
+  
+                
                 out
             }
         }
@@ -252,7 +275,6 @@ impl State {
 
 
     fn skip_message_keys(&mut self, until: u16)  {
-        // we will not accept more skips than 200;
 
         if self.rck == None {
             return 
@@ -264,15 +286,17 @@ impl State {
                 self.fcnt_rcv += 1
                 }
                 return
-        }
+    }
     
 
     fn try_skipped_message_keys(&mut self, header: &PhyPayload, ciphertext: &[u8], nonce:[u8;13], ad: &[u8]) -> Option<Vec<u8>> {
         match self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
             true => {
+                
             let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
                 .unwrap();
             self.mk_skipped.remove(&(header.dh_pub_id, header.fcnt)).unwrap();
+
             decrypt(&mk[..16], &nonce,ciphertext, &concat(header.mtype,nonce,header.dh_pub_id,header.fcnt, &ad))
             },
             false => return None
@@ -295,7 +319,8 @@ impl State {
                 match self.ratchet_r(input) {
                     Some(x) => return {
                         Some((x,true))},
-                    None => return None,
+                    None => {
+                        return None},
                 }
             },
             7 => {
@@ -316,8 +341,11 @@ impl State {
         match input[0] {
             6 => {
                 match self.ratchet_i(input) {
-                    true => return None,
-                    false => return None,
+                    true => return {
+                        None},
+                    false => return {
+                        None
+                    },
                 }
             },
             8 => {
