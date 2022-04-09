@@ -91,8 +91,6 @@ impl State {
         let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
         enc
     }
-
-
     fn ratchet_r(&mut self, dhr_encrypted:Vec<u8>) -> Option<Vec<u8>> {
 
         // first, attempt to decrypt incoming key
@@ -128,6 +126,7 @@ impl State {
 
         self.tmp_shared_secret = Some(*r_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
 
+        // return the key
         Some(dhr_ack) 
         
     }
@@ -192,7 +191,7 @@ impl State {
         if self.mk_skipped.len() > 500 {
             self.mk_skipped.clear();
         }
-        self.skip_message_keys(1000);
+        self.skip_message_keys(20);
 
         self.dh_id += 1;
 
