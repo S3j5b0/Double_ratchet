@@ -9,6 +9,7 @@ edition = "2021"
 
 bytes = "1"
 serde_json = "0.8"
+nom = "7.1.1"
 zeroize = "1.5.4"
 rand = "*"
 rand_core = { version = "0.6", features = ["getrandom"] }
