@@ -114,7 +114,7 @@ impl ASRatchet {
 
 
 
-    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : u8) -> Vec<u8> {
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.sck.unwrap());
         self.sck = Some(cks);
                 

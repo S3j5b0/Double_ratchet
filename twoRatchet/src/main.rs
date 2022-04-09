@@ -1,11 +1,9 @@
 
 
-use twoRatchet::ratchfuncs::{State};
 use twoRatchet::ED::{EDRatchet};
 use twoRatchet::AS::{ASRatchet};
 extern crate alloc;
-use alloc::vec::Vec;
-use alloc::collections::BTreeMap;
+
 
 fn main() {
 
@@ -42,7 +40,7 @@ fn main() {
         assert_eq!(dec0, b"msg".to_vec());
 
 
-        if ed_ratchet.fcnt_send >= 3 {
+        if ed_ratchet.fcnt_down >= 3 {
         let newpk = ed_ratchet.initiate_ratch();
         // R recevies dhr res
         let dh_ack = match  as_ratchet.receive(newpk) {

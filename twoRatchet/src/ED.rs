@@ -17,10 +17,10 @@ pub const CONSTANT_NONCE: [u8;13] = [42;13];
 pub struct EDRatchet {
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
-    pub sck: Option<[u8;32]>, // sending chain key
-    pub rck: Option<[u8;32]>, // receiving chain key
-    pub fcnt_rcv: u16, // sending message numbering
-    pub fcnt_send: u16, // receiving message numbering
+    pub sck: [u8;32], // sending chain key
+    pub rck: [u8;32], // receiving chain key
+    pub fcnt_down: u16, // sending message numbering
+    pub fcnt_up: u16, // receiving message numbering
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
@@ -38,10 +38,10 @@ impl EDRatchet {
         EDRatchet {
             shared_secret: None,
             rk: sk,
-            sck: Some(sck),
-            rck: Some(rck),
-            fcnt_send: 0,
-            fcnt_rcv: 0,
+            sck: sck,
+            rck: rck,
+            fcnt_down: 0,
+            fcnt_up: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
@@ -109,9 +109,9 @@ impl EDRatchet {
 
         // Then we advance the actual root chain
 
-        let (rk, cks) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
+        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
         
-        let (rk, ckr) = kdf_rk(self.shared_secret.unwrap(),&rk);
+        let (rk, rck) = kdf_rk(self.shared_secret.unwrap(),&rk);
 
 
         // we skip a constant amount of the root chain
@@ -124,10 +124,10 @@ impl EDRatchet {
         self.dh_id += 1;
 
         self.rk = rk;
-        self.sck =  Some(cks);
-        self.rck =  Some(ckr);
-        self.fcnt_send= 0;
-        self.fcnt_rcv= 0;
+        self.sck =  sck;
+        self.rck =  rck;
+        self.fcnt_up= 0;
+        self.fcnt_down= 0;
         
         true
     }
@@ -139,19 +139,19 @@ impl EDRatchet {
     /// * `ad` - associated data, most likely the devaddr
     /// * `mtype` - the mtype, which should also be authenticated
 
-    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : u8) -> Vec<u8> {
-        let (cks, mk) = kdf_ck(&self.sck.unwrap());
-        self.sck = Some(cks);
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
+        let (cks, mk) = kdf_ck(&self.sck);
+        self.sck = cks;
                 
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
 
 
-        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_up, &ad)); // concat
 
-        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
+        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_up,self.dh_id,encrypted_data.clone(),nonce);
  
-        self.fcnt_send += 1;
+        self.fcnt_up += 1;
         let hdr = header.serialize(); 
         hdr
     }
@@ -188,9 +188,9 @@ impl EDRatchet {
             None => {
 
                 self.skip_message_keys(deserial_hdr.fcnt);
-                let (rck, mk) = kdf_ck(&self.rck.unwrap());
-                self.rck = Some(rck);
-                self.fcnt_rcv += 1;
+                let (rck, mk) = kdf_ck(&self.rck);
+                self.rck = rck;
+                self.fcnt_down += 1;
 
                 
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
@@ -208,14 +208,12 @@ impl EDRatchet {
 
     fn skip_message_keys(&mut self, until: u16)  {
 
-        if self.rck == None {
-            return 
-        }
-           while self.fcnt_rcv  < until {
-                let (ckr, mk) = kdf_ck(&self.rck.unwrap());
-                self.rck = Some(ckr);
-                self.mk_skipped.insert((self.dh_id, self.fcnt_rcv), mk);
-                self.fcnt_rcv += 1
+
+           while self.fcnt_down  < until {
+                let (rck, mk) = kdf_ck(&self.rck);
+                self.rck = rck;
+                self.mk_skipped.insert((self.dh_id, self.fcnt_down), mk);
+                self.fcnt_down += 1
                 }
                 return
     }

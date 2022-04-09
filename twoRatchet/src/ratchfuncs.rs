@@ -205,7 +205,7 @@ impl State {
     }
 
 
-    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : u8) -> Vec<u8> {
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
         let (cks, mk) = kdf_ck(&self.sck.unwrap());
         self.sck = Some(cks);
                 
@@ -214,9 +214,6 @@ impl State {
 
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
-
-
-
 
 
         let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);

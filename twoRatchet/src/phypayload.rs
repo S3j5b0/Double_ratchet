@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 pub struct PhyPayload {
-    pub mtype: u8,
+    pub mtype: i8,
     pub nonce: [u8; 13],
     pub fcnt: u16, 
     pub devaddr : [u8;4],
@@ -12,7 +12,7 @@ pub struct PhyPayload {
 }
 
 impl PhyPayload {
-    pub fn new( mtype : u8,devaddr:[u8;4],n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
+    pub fn new( mtype : i8,devaddr:[u8;4],n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
         PhyPayload {
             mtype: mtype,
             nonce: nonce,
@@ -36,6 +36,7 @@ impl PhyPayload {
         } = self;
 
         let mut buffer = Vec::with_capacity(22+ciphertext.len());
+
 
         buffer.extend_from_slice(&mtype.to_be_bytes());
         buffer.extend_from_slice(nonce);
@@ -61,7 +62,7 @@ pub fn deserialize(input: &[u8]) -> Option<PhyPayload> {
 
     match nom::combinator::complete(
         nom::sequence::tuple((
-            nom::number::complete::be_u8,
+            nom::number::complete::be_i8,
             parse_array,
             parse_array,
             nom::number::complete::be_u16,
@@ -83,4 +84,11 @@ pub fn deserialize(input: &[u8]) -> Option<PhyPayload> {
         Ok(x) => return Some(x),
         _=> return None,
     }
+}
+
+fn prepare_mhdr(mtype : i8) -> u8  {
+    (mtype << 3) as u8
+}
+fn extract_mtype(mhdr : u8) -> i8  {
+    (mhdr >> 3) as i8
 }

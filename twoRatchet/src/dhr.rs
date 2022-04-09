@@ -5,10 +5,10 @@ use alloc::vec::Vec;
 
 
 /// Concat header with associated data
-pub fn concat(mtype: u8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:&[u8]) ->Vec<u8> {
+pub fn concat(mtype: i8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:&[u8]) ->Vec<u8> {
     let mut buffer : Vec<u8> = Vec::with_capacity(17+devaddr.len());
     buffer.extend_from_slice(devaddr);
-    buffer.extend_from_slice(&[mtype]);
+    buffer.extend_from_slice(&[mtype as u8]);
     buffer.extend_from_slice(&nonce);
     buffer.extend([n.to_be_bytes(), dh_id.to_be_bytes()].concat().to_vec());
     buffer
