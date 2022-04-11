@@ -66,6 +66,9 @@ impl ASRatchet {
             Some(dhr) => dhr,
             None => return None,
         };
+        if self.dhr_res_nonce <= dhr_req.nonce{
+            return None
+        }
 
         self.dhr_res_nonce = dhr_req.nonce;
 
@@ -150,7 +153,6 @@ impl ASRatchet {
         };
 
         if self.dh_id < deserial_hdr.dh_pub_id {
-
             self.finalize_ratchet();
         }        
 
@@ -165,7 +167,8 @@ impl ASRatchet {
 
                 
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
-  
+          
+                
                 
                 out
             }

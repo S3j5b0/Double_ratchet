@@ -25,33 +25,59 @@ fn main() {
     let mut as_ratchet = ASRatchet::new(sk, uplink,downlink, devaddr.to_vec());
 
 
+    let newpk = ed_ratchet.initiate_ratch();
 
+    let otherpk = ed_ratchet.initiate_ratch();
+    // R recevies dhr res
+    let dh_ack = match  as_ratchet.receive(newpk) {
+        Some((x,b)) => x,
+        None => [0].to_vec(), // in this case, do nothing
+    };    
+
+    let _ratchdone =  ed_ratchet.receive(dh_ack); 
     // A test where a message is encrpyted, and a ratcheting procedure is performed 10 times.
-    for _ in 1..10 {
 
+
+
+    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), devaddr);
+
+        
+    let dec0 = match as_ratchet.receive(enci){
+        Some((x,b)) => x,
+        None => [0].to_vec(),
+    };
+
+
+    assert_eq!(dec0, b"msg".to_vec());
+
+    /*
+    for n in 1..20 {
         let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), devaddr);
 
-
+        
         let dec0 = match as_ratchet.receive(enci){
             Some((x,b)) => x,
             None => [0].to_vec(),
         };
 
+
         assert_eq!(dec0, b"msg".to_vec());
 
-
-        if ed_ratchet.fcnt_down >= 3 {
+        
         let newpk = ed_ratchet.initiate_ratch();
         // R recevies dhr res
+        if n %2 == 0 {
         let dh_ack = match  as_ratchet.receive(newpk) {
             Some((x,b)) => x,
             None => [0].to_vec(), // in this case, do nothing
         };    
 
         let _ratchdone =  ed_ratchet.receive(dh_ack); 
-    }
+        }
+    
     }
 
+*/
 
 
 
