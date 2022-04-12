@@ -58,15 +58,22 @@ impl ASRatchet {
         // first, attempt to decrypt incoming key
         let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
                 Some(x) => x,
-                None => return None,
+                None => return {
+                    println!("failed to decrtype dhrreq");
+                    None
+                },
         };
         
         // then we deserialize dhr and create our own dhrackknowledgement message
         let dhr_req = match unpack_dhr(dhr_serial){
             Some(dhr) => dhr,
-            None => return None,
+            None => return 
+            {
+                println!("failed to unpack dhr-req");
+                None},
         };
         if self.dhr_res_nonce <= dhr_req.nonce{
+            println!("dhr req nonce is too small ");
             return None
         }
 

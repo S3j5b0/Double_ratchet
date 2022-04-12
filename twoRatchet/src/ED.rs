@@ -85,15 +85,19 @@ impl EDRatchet {
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
                 None => {
+                    println!("failed to decrypt dhrack");
                     return false}, 
         };
         // then we unpack the dhr ackknowledgement
         let dhr_ack = match unpack_dhr(dhr_ack_serial) {
             Some(dhr) => dhr,
-            None => {return false},
+            None => {
+                println!("unpacking dhr failed");
+                return false},
         };
         // the incoming acknowledgement should mirror the DHRP that we are at
         if self.dhr_ack_nonce <= dhr_ack.nonce{
+            println!("ack nonce is too small");
             return false;
         }
         self.dhr_ack_nonce = dhr_ack.nonce;
@@ -190,7 +194,7 @@ impl EDRatchet {
                 self.skip_message_keys(deserial_hdr.fcnt);
                 let (rck, mk) = kdf_ck(&self.rck);
                 self.rck = rck;
-                self.fcnt_up += 1;
+                self.fcnt_down += 1;
 
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
   

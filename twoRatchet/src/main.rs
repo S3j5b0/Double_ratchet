@@ -27,9 +27,20 @@ fn main() {
 
     let newpk = ed_ratchet.initiate_ratch();
 
+    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), devaddr);
+
+        
+    let dec0 = match as_ratchet.receive(enci){
+        Some((x,b)) => x,
+        None => [0].to_vec(),
+    };
+
+
+    assert_eq!(dec0, b"msg".to_vec());
+
     let otherpk = ed_ratchet.initiate_ratch();
     // R recevies dhr res
-    let dh_ack = match  as_ratchet.receive(newpk) {
+    let dh_ack = match  as_ratchet.receive(otherpk) {
         Some((x,b)) => x,
         None => [0].to_vec(), // in this case, do nothing
     };    
@@ -50,7 +61,7 @@ fn main() {
 
     assert_eq!(dec0, b"msg".to_vec());
 
-    /*
+    
     for n in 1..20 {
         let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), devaddr);
 
@@ -77,7 +88,7 @@ fn main() {
     
     }
 
-*/
+
 
 
 
