@@ -72,7 +72,7 @@ impl ASRatchet {
                 println!("failed to unpack dhr-req");
                 None},
         };
-        if self.dhr_res_nonce <= dhr_req.nonce{
+        if self.dhr_res_nonce >= dhr_req.nonce{
             println!("dhr req nonce is too small ");
             return None
         }
