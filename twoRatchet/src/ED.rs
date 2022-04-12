@@ -96,7 +96,7 @@ impl EDRatchet {
                 return false},
         };
         // the incoming acknowledgement should mirror the DHRP that we are at
-        if self.dhr_ack_nonce <= dhr_ack.nonce{
+        if self.dhr_ack_nonce >= dhr_ack.nonce{
             println!("ack nonce is too small");
             return false;
         }
