@@ -44,6 +44,7 @@ fn main() {
         Some((x,b)) => x,
         None => [0].to_vec(), // in this case, do nothing
     };    
+    println!("acklen {}", dh_ack.len());
 
     let _ratchdone =  ed_ratchet.receive(dh_ack); 
     // A test where a message is encrpyted, and a ratcheting procedure is performed 10 times.

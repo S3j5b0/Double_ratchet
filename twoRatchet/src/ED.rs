@@ -84,20 +84,15 @@ impl EDRatchet {
         // We first decrypt the phypayload
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
-                None => {
-                    println!("failed to decrypt dhrack");
-                    return false}, 
+                None => return false, 
         };
         // then we unpack the dhr ackknowledgement
         let dhr_ack = match unpack_dhr(dhr_ack_serial) {
             Some(dhr) => dhr,
-            None => {
-                println!("unpacking dhr failed");
-                return false},
+            None => return false,
         };
         // the incoming acknowledgement should mirror the DHRP that we are at
         if self.dhr_ack_nonce >= dhr_ack.nonce{
-            println!("ack nonce is too small");
             return false;
         }
         self.dhr_ack_nonce = dhr_ack.nonce;

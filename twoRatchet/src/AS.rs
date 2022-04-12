@@ -21,8 +21,8 @@ pub struct ASRatchet {
     pub rk: [u8;32],
     pub sck: Option<[u8;32]>, // sending chain key
     pub rck: Option<[u8;32]>, // receiving chain key
-    pub fcnt_rcv: u16, // sending message numbering
-    pub fcnt_send: u16, // receiving message numbering
+    pub fcnt_up: u16, // sending message numbering
+    pub fcnt_down: u16, // receiving message numbering
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_shared_secret : Option<[u8;32]>,
     dhr_ack_nonce : u16,
@@ -42,8 +42,8 @@ impl ASRatchet {
             rk: sk,
             sck: Some(sck),
             rck: Some(rck),
-            fcnt_send: 0,
-            fcnt_rcv: 0,
+            fcnt_down: 0,
+            fcnt_up: 0,
             mk_skipped: BTreeMap::new(),
             tmp_shared_secret:None,
             dhr_ack_nonce: 0,
@@ -58,22 +58,15 @@ impl ASRatchet {
         // first, attempt to decrypt incoming key
         let dhr_serial = match self.ratchet_decrypt(dhr_encrypted) {
                 Some(x) => x,
-                None => return {
-                    println!("failed to decrtype dhrreq");
-                    None
-                },
+                None => return None,
         };
         
         // then we deserialize dhr and create our own dhrackknowledgement message
         let dhr_req = match unpack_dhr(dhr_serial){
             Some(dhr) => dhr,
-            None => return 
-            {
-                println!("failed to unpack dhr-req");
-                None},
+            None => return None,
         };
         if self.dhr_res_nonce >= dhr_req.nonce{
-            println!("dhr req nonce is too small ");
             return None
         }
 
@@ -116,9 +109,8 @@ impl ASRatchet {
         self.rk = rk;
         self.sck =  Some(sck);
         self.rck =  Some(rck);
-        self.fcnt_send= 0;
-        self.fcnt_rcv= 0;
-
+        self.fcnt_down= 0;
+        self.fcnt_up= 0;
 
     }
 
@@ -132,15 +124,15 @@ impl ASRatchet {
         OsRng.fill_bytes(&mut nonce);
 
 
-        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_send, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_down, &ad)); // concat
 
 
 
 
 
-        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_send,self.dh_id,encrypted_data.clone(),nonce);
+        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_down,self.dh_id,encrypted_data.clone(),nonce);
  
-        self.fcnt_send += 1;
+        self.fcnt_down += 1;
         let hdr = header.serialize(); 
         hdr
     }
@@ -170,7 +162,7 @@ impl ASRatchet {
                 self.skip_message_keys(deserial_hdr.fcnt);
                 let (rck, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(rck);
-                self.fcnt_rcv += 1;
+                self.fcnt_up += 1;
 
                 
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
@@ -192,11 +184,11 @@ impl ASRatchet {
         if self.rck == None {
             return 
         }
-           while self.fcnt_rcv  < until {
+           while self.fcnt_up  < until {
                 let (ckr, mk) = kdf_ck(&self.rck.unwrap());
                 self.rck = Some(ckr);
-                self.mk_skipped.insert((self.dh_id, self.fcnt_rcv), mk);
-                self.fcnt_rcv += 1
+                self.mk_skipped.insert((self.dh_id, self.fcnt_up), mk);
+                self.fcnt_up += 1
                 }
                 return
     }
