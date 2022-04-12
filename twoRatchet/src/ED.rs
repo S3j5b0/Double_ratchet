@@ -24,7 +24,8 @@ pub struct EDRatchet {
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
-    dhr_res_nonce : u16,
+    dhr_req_nonce : u16,
+    dhr_ack_nonce : u16,
     pub dh_id : u16,
     devaddr : Vec<u8>,
 }
@@ -45,7 +46,8 @@ impl EDRatchet {
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
-            dhr_res_nonce: 0,
+            dhr_req_nonce: 0,
+            dhr_ack_nonce: 0,
             dh_id: 0,
             devaddr,
         }
@@ -63,8 +65,8 @@ impl EDRatchet {
         self.tmp_pkey = Some(i_dh_public_key);
         self.tmp_skey = Some(i_dh_privkey);
 
-        self.dhr_res_nonce += 1;
-        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_res_nonce);
+        self.dhr_req_nonce += 1;
+        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_req_nonce);
         
         let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
         enc
@@ -74,27 +76,26 @@ impl EDRatchet {
     ///
     /// # Arguments
     ///
-    /// * `plaintext` - The stuff to be encrypted
-    /// * `ad` - associated data, most likely the devaddr
-    /// * `mtype` - the mtype, which should also be authenticated
+    /// * `dhr_ack_encrypted` - the encrypted dhrack message
+
 
     fn ratchet(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
 
         // We first decrypt the phypayload
         let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
                 Some(x) => x,
-                None => {
-                    return false}, 
+                None => return false, 
         };
         // then we unpack the dhr ackknowledgement
         let dhr_ack = match unpack_dhr(dhr_ack_serial) {
             Some(dhr) => dhr,
-            None => {return false},
+            None => return false,
         };
         // the incoming acknowledgement should mirror the DHRP that we are at
-        if self.dhr_res_nonce != dhr_ack.nonce{
+        if self.dhr_ack_nonce >= dhr_ack.nonce{
             return false;
         }
+        self.dhr_ack_nonce = dhr_ack.nonce;
 
         let mut buf = [0; 32];
         
@@ -115,7 +116,6 @@ impl EDRatchet {
 
 
         // we skip a constant amount of the root chain
-        self.mk_skipped =  BTreeMap::new();
         if self.mk_skipped.len() > 500 {
             self.prune_mkskipped();
         }
@@ -145,7 +145,6 @@ impl EDRatchet {
                 
         let mut nonce = [0;13];
         OsRng.fill_bytes(&mut nonce);
-
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_up, &ad)); // concat
 
@@ -192,7 +191,6 @@ impl EDRatchet {
                 self.rck = rck;
                 self.fcnt_down += 1;
 
-                
                 let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
   
                 
@@ -207,8 +205,6 @@ impl EDRatchet {
 
 
     fn skip_message_keys(&mut self, until: u16)  {
-
-
            while self.fcnt_down  < until {
                 let (rck, mk) = kdf_ck(&self.rck);
                 self.rck = rck;

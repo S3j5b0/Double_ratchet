@@ -86,9 +86,3 @@ pub fn deserialize(input: &[u8]) -> Option<PhyPayload> {
     }
 }
 
-fn prepare_mhdr(mtype : i8) -> u8  {
-    (mtype << 3) as u8
-}
-fn extract_mtype(mhdr : u8) -> i8  {
-    (mhdr >> 3) as i8
-}
