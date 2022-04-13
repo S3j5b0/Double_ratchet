@@ -6,7 +6,7 @@ use x25519_dalek_ng::{self,PublicKey, StaticSecret};
 
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
-use rand_core::{OsRng,RngCore};
+use rand_core::{RngCore, CryptoRng};
 use super::{
     encryption::{encrypt,decrypt},
     dhr::{concat,prepare_dhr,unpack_dhr},
@@ -16,7 +16,8 @@ use super::{
 
 
 
-pub struct ASRatchet {
+pub struct ASRatchet <Rng: CryptoRng + RngCore>
+where Rng: Copy,{
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
     pub sck: Option<[u8;32]>, // sending chain key
@@ -29,13 +30,13 @@ pub struct ASRatchet {
     dhr_res_nonce : u16,
     pub dh_id : u16,
     devaddr : Vec<u8>,
+    rng: Rng,
 }
 
-impl ASRatchet {
+impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
+where Rng: Copy,{
 
-
-
-    pub fn new(sk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>) -> Self {
+    pub fn new(sk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>, rng:Rng) -> Self {
 
         ASRatchet {
             shared_secret : None,
@@ -50,6 +51,7 @@ impl ASRatchet {
             dhr_res_nonce: 0,
             dh_id: 0,
             devaddr,
+            rng
         }
     }
 
@@ -76,7 +78,7 @@ impl ASRatchet {
         buf.copy_from_slice(&dhr_req.pk[..32]);
         let i_dh_public_key = PublicKey::from(buf);
 
-        let r_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
+        let r_dh_privkey : StaticSecret  = StaticSecret::new(self.rng);
         let r_dh_public_key = PublicKey::from(&r_dh_privkey);
 
         // create own drh ack nonce message
@@ -121,7 +123,7 @@ impl ASRatchet {
         self.sck = Some(cks);
                 
         let mut nonce = [0;13];
-        OsRng.fill_bytes(&mut nonce);
+        self.rng.fill_bytes(&mut nonce);
 
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_down, &ad)); // concat

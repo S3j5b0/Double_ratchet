@@ -1,4 +1,5 @@
 
+use rand_core::{OsRng};
 
 use twoRatchet::ED::{EDRatchet};
 use twoRatchet::AS::{ASRatchet};
@@ -20,9 +21,9 @@ fn main() {
 
     // Using the output from handshake, the two parites initialize
 
-    let mut ed_ratchet  = EDRatchet::new(sk,downlink, uplink,devaddr.to_vec());
+    let mut ed_ratchet  = EDRatchet::new(sk,downlink, uplink,devaddr.to_vec(), OsRng);
 
-    let mut as_ratchet = ASRatchet::new(sk, uplink,downlink, devaddr.to_vec());
+    let mut as_ratchet = ASRatchet::new(sk, uplink,downlink, devaddr.to_vec(),OsRng);
 
 
     let newpk = ed_ratchet.initiate_ratch();

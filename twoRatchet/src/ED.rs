@@ -4,7 +4,7 @@ use x25519_dalek_ng::{self,PublicKey, StaticSecret};
 
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
-use rand_core::{OsRng,RngCore};
+use rand_core::{RngCore,CryptoRng};
 use super::{
     encryption::{encrypt,decrypt},
     dhr::{concat,prepare_dhr,unpack_dhr},
@@ -14,7 +14,8 @@ use super::{
 pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
 
-pub struct EDRatchet {
+pub struct EDRatchet <Rng: CryptoRng + RngCore>
+where Rng: Copy,{
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
     pub sck: [u8;32], // sending chain key
@@ -28,13 +29,13 @@ pub struct EDRatchet {
     dhr_ack_nonce : u16,
     pub dh_id : u16,
     devaddr : Vec<u8>,
+    rng : Rng,
 }
 
-impl EDRatchet {
+impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
+where Rng: Copy,{
 
-
-
-    pub fn new(sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>) -> Self {
+    pub fn new (sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>, rng :Rng) -> Self {
 
         EDRatchet {
             shared_secret: None,
@@ -50,6 +51,7 @@ impl EDRatchet {
             dhr_ack_nonce: 0,
             dh_id: 0,
             devaddr,
+            rng
         }
 
     }
@@ -59,7 +61,7 @@ impl EDRatchet {
     ///
 
     pub fn initiate_ratch(&mut self) -> Vec<u8> {
-        let i_dh_privkey : StaticSecret  = StaticSecret::new(OsRng);
+        let i_dh_privkey : StaticSecret  = StaticSecret::new(self.rng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
 
         self.tmp_pkey = Some(i_dh_public_key);
@@ -144,7 +146,7 @@ impl EDRatchet {
         self.sck = cks;
                 
         let mut nonce = [0;13];
-        OsRng.fill_bytes(&mut nonce);
+        self.rng.fill_bytes(&mut nonce);
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_up, &ad)); // concat
 
