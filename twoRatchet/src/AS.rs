@@ -17,7 +17,7 @@ use super::{
 
 
 pub struct ASRatchet <Rng: CryptoRng + RngCore>
-where Rng: Copy,{
+{
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
     pub sck: Option<[u8;32]>, // sending chain key
@@ -34,7 +34,7 @@ where Rng: Copy,{
 }
 
 impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
-where Rng: Copy,{
+{
 
     pub fn new(sk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>, rng:Rng) -> Self {
 
@@ -78,7 +78,7 @@ where Rng: Copy,{
         buf.copy_from_slice(&dhr_req.pk[..32]);
         let i_dh_public_key = PublicKey::from(buf);
 
-        let r_dh_privkey : StaticSecret  = StaticSecret::new(self.rng);
+        let r_dh_privkey : StaticSecret  = StaticSecret::new(&mut self.rng);
         let r_dh_public_key = PublicKey::from(&r_dh_privkey);
 
         // create own drh ack nonce message

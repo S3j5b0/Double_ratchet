@@ -15,7 +15,7 @@ pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
 
 pub struct EDRatchet <Rng: CryptoRng + RngCore>
-where Rng: Copy,{
+{
     pub shared_secret : Option<[u8;32]>,
     pub rk: [u8;32],
     pub sck: [u8;32], // sending chain key
@@ -33,8 +33,7 @@ where Rng: Copy,{
 }
 
 impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
-where Rng: Copy,{
-
+{
     pub fn new (sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :Vec<u8>, rng :Rng) -> Self {
 
         EDRatchet {
@@ -61,7 +60,7 @@ where Rng: Copy,{
     ///
 
     pub fn initiate_ratch(&mut self) -> Vec<u8> {
-        let i_dh_privkey : StaticSecret  = StaticSecret::new(self.rng);
+        let i_dh_privkey : StaticSecret  = StaticSecret::new(&mut self.rng);
         let i_dh_public_key = PublicKey::from(&i_dh_privkey);
 
         self.tmp_pkey = Some(i_dh_public_key);
