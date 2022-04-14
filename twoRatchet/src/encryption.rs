@@ -36,7 +36,7 @@ pub fn decrypt(
     nonce: &[u8],
     ciphertext: &[u8],
     ad: &[u8],
-) -> Option<Vec<u8>> {
+) -> Result<Vec<u8>,&'static str> {
 
     // Initialize CCM mode
     let ccm: Ccm<Aes128, U8, U13> = Ccm::new(GenericArray::from_slice(key));
@@ -49,9 +49,9 @@ pub fn decrypt(
         },
     );
 
-    match dst_out_pt {
-        Ok(x) => Some(x),
-        _ => None,
-    }
+     match dst_out_pt {
+         Ok(x) => Ok(x),
+         Err(s) => Err("Aead decryption error")
+     }
     
 }

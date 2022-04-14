@@ -32,8 +32,8 @@ fn main() {
 
         
     let dec0 = match as_ratchet.receive(enci){
-        Some((x,b)) => x,
-        None => [0].to_vec(),
+        Ok((x,b)) => x,
+        Err(s) => panic!("decrpytion error {}", s),
     };
 
 
@@ -42,12 +42,15 @@ fn main() {
     let otherpk = ed_ratchet.initiate_ratch();
     // R recevies dhr res
     let dh_ack = match  as_ratchet.receive(otherpk) {
-        Some((x,b)) => x,
-        None => [0].to_vec(), // in this case, do nothing
+        Ok((x,b)) => x,
+        Err(s) => panic!("decrypt error {}", s), // in this case, do nothing
     };    
     println!("acklen {}", dh_ack.len());
 
-    let _ratchdone =  ed_ratchet.receive(dh_ack); 
+    match ed_ratchet.receive(dh_ack) {
+        Ok(x) => println!("succesfull ratch"),
+        Err(s) => panic!("rathcet error {}", s)
+    }
     // A test where a message is encrpyted, and a ratcheting procedure is performed 10 times.
 
 
@@ -56,8 +59,8 @@ fn main() {
 
         
     let dec0 = match as_ratchet.receive(enci){
-        Some((x,b)) => x,
-        None => [0].to_vec(),
+        Ok((x,b)) => x,
+        Err(s) => [0].to_vec(),
     };
 
 
@@ -69,8 +72,8 @@ fn main() {
 
         
         let dec0 = match as_ratchet.receive(enci){
-            Some((x,b)) => x,
-            None => [0].to_vec(),
+            Ok((x,b)) => x,
+            Err(s) => panic!("error {}", s),
         };
 
 
@@ -80,10 +83,10 @@ fn main() {
         let newpk = ed_ratchet.initiate_ratch();
         // R recevies dhr res
         if n %2 == 0 {
-        let dh_ack = match  as_ratchet.receive(newpk) {
-            Some((x,b)) => x,
-            None => [0].to_vec(), // in this case, do nothing
-        };    
+        let dh_ack = match  as_ratchet.receive(newpk){
+            Ok((x,b)) => x,
+            Err(s) => panic!("error {}", s),
+        };
 
         let _ratchdone =  ed_ratchet.receive(dh_ack); 
         }

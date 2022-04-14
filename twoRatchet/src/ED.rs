@@ -78,23 +78,18 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// # Arguments
     ///
     /// * `dhr_ack_encrypted` - the encrypted dhrack message
+    /// Returns an empty Ok, in the case that the ratchet completed successfully
 
 
-    fn ratchet(&mut self, dhr_ack_encrypted:Vec<u8>) -> bool {
+    fn ratchet(&mut self, dhr_ack_encrypted:Vec<u8>) -> Result<(),&str> {
 
         // We first decrypt the phypayload
-        let dhr_ack_serial = match self.ratchet_decrypt(dhr_ack_encrypted){    
-                Some(x) => x,
-                None => return false, 
-        };
+        let dhr_ack_serial = self.ratchet_decrypt(dhr_ack_encrypted)?;
         // then we unpack the dhr ackknowledgement
-        let dhr_ack = match unpack_dhr(dhr_ack_serial) {
-            Some(dhr) => dhr,
-            None => return false,
-        };
+        let dhr_ack =  unpack_dhr(dhr_ack_serial)?;
         // the incoming acknowledgement should mirror the DHRP that we are at
         if self.dhr_ack_nonce >= dhr_ack.nonce{
-            return false;
+            return Err("Received old DHRack");
         }
         self.dhr_ack_nonce = dhr_ack.nonce;
 
@@ -120,7 +115,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         if self.mk_skipped.len() > 500 {
             self.prune_mkskipped();
         }
-        self.skip_message_keys(1000);
+        self.skip_message_keys(500);
 
         self.dh_id += 1;
 
@@ -130,7 +125,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         self.fcnt_up= 0;
         self.fcnt_down= 0;
         
-        true
+        Ok(())
     }
     /// Internal function for encryption, and advancing the sending chain
     ///
@@ -141,18 +136,18 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// * `mtype` - the mtype, which should also be authenticated
 
     fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
-        let (cks, mk) = kdf_ck(&self.sck);
-        self.sck = cks;
+        let (sck, mk) = kdf_ck(&self.sck);
+        self.sck = sck;
                 
         let mut nonce = [0;13];
         self.rng.fill_bytes(&mut nonce);
 
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_up, &ad)); // concat
 
-        let header = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_up,self.dh_id,encrypted_data.clone(),nonce);
+        let phypayload = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_up,self.dh_id,encrypted_data.clone(),nonce);
  
         self.fcnt_up += 1;
-        let hdr = header.serialize(); 
+        let hdr = phypayload.serialize(); 
         hdr
     }
 
@@ -178,13 +173,12 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// * `ad` - associated data, most likely the devaddr
     /// * `mtype` - the mtype, which should also be authenticated
     
-    fn ratchet_decrypt(&mut self, header: Vec<u8>) -> Option<Vec<u8>> {
-        let deserial_hdr =  match deserialize(&header) {
-            Some(hdr) => hdr,
-            None => return None
-        };
+    fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
+        let deserial_hdr = deserialize(&phypayload)?;
+
+
         match self.try_skipped_message_keys(&deserial_hdr, &deserial_hdr.ciphertext, deserial_hdr.nonce,&self.devaddr.clone())  {
-            Some(out) => Some(out),
+            Some(out) => Ok(out),
             None => {
 
                 self.skip_message_keys(deserial_hdr.fcnt);
@@ -192,14 +186,17 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
                 self.rck = rck;
                 self.fcnt_down += 1;
 
-                let out = decrypt(&mk[..16],&deserial_hdr.nonce, &deserial_hdr.ciphertext, &concat(deserial_hdr.mtype,deserial_hdr.nonce,deserial_hdr.dh_pub_id,deserial_hdr.fcnt, &self.devaddr));
-  
+                return decrypt(&mk[..16],
+                    &deserial_hdr.nonce, 
+                    &deserial_hdr.ciphertext, 
+                    &concat(deserial_hdr.mtype,
+                    deserial_hdr.nonce,
+                    deserial_hdr.dh_pub_id,
+                    deserial_hdr.fcnt, 
+                    &self.devaddr));
                 
-                out
             }
         }
-
-    
 
     }
 
@@ -216,15 +213,23 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     }
     
 
-    fn try_skipped_message_keys(&mut self, header: &PhyPayload, ciphertext: &[u8], nonce:[u8;13], ad: &[u8]) -> Option<Vec<u8>> {
-        match self.mk_skipped.contains_key(&(header.dh_pub_id, header.fcnt)) {
+    fn try_skipped_message_keys(&mut self, phypayload: &PhyPayload, ciphertext: &[u8], nonce:[u8;13], ad: &[u8]) -> Option<Vec<u8>> {
+        match self.mk_skipped.contains_key(&(phypayload.dh_pub_id, phypayload.fcnt)) {
             true => {
                 
-            let mk = *self.mk_skipped.get(&(header.dh_pub_id, header.fcnt))
+            let mk = *self.mk_skipped.get(&(phypayload.dh_pub_id, phypayload.fcnt))
                 .unwrap();
-            self.mk_skipped.remove(&(header.dh_pub_id, header.fcnt)).unwrap();
+            self.mk_skipped.remove(&(phypayload.dh_pub_id, phypayload.fcnt)).unwrap();
 
-            decrypt(&mk[..16], &nonce,ciphertext, &concat(header.mtype,nonce,header.dh_pub_id,header.fcnt, &ad))
+            match decrypt(&mk[..16], 
+                &nonce,ciphertext, 
+                &concat(phypayload.mtype,nonce,
+                phypayload.dh_pub_id,
+                phypayload.fcnt, 
+                &ad)) {
+                    Ok(x) => Some(x),
+                    Err(_) => None
+                }
             },
             false => return None
         } 
@@ -238,25 +243,22 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         
     }
  
-    pub fn receive(&mut self,input: Vec<u8>) -> Option<(Vec<u8>,bool)>{
+    pub fn receive(&mut self,input: Vec<u8>) -> Result<Option<Vec<u8>>,&str>{
         match input[0] {
             6 => {
                 match self.ratchet(input) {
-                    true => return {
-                        None},
-                    false => return {
-                        None
-                    },
+                    Ok(()) => Ok(None),
+                    Err(s) => return Err(s),
                 }
             },
             8 => {
                 match self.ratchet_decrypt(input){
-                    Some(x) => Some((x,false)),
-                    None => None 
+                    Ok(x) => Ok(Some(x)),
+                    Err(s) => Err(s), 
                 }
             }
             _ => {
-                return None
+                return Err("unkown mtype");
             }
 
         }

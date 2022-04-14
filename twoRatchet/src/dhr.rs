@@ -24,7 +24,7 @@ pub fn prepare_dhr(pk: &[u8], dhrnonce: u16) -> Vec<u8> {
     
     buffer
 }
-pub fn unpack_dhr(input: Vec<u8>) -> Option<DhPayload> {
+pub fn unpack_dhr(input: Vec<u8>) -> Result<DhPayload, &'static str>{
     use nom::{Finish, Parser};
 
     fn parse_array<const N: usize>(input: &[u8]) -> nom::IResult<&[u8], [u8; N]> {
@@ -45,9 +45,9 @@ pub fn unpack_dhr(input: Vec<u8>) -> Option<DhPayload> {
     )
     .parse(&input)
     .finish()
-    .map(|(_, header)| header) {
-        Ok(x) => return Some(x),
-        _=> return None,
+    .map(|(_, dhr)| dhr) {
+        Ok(x) => return Ok(x),
+        _=> return Err("Could not parse dhr"),
     }
 }
 

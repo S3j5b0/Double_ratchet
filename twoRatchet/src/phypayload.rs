@@ -51,7 +51,7 @@ impl PhyPayload {
 
 }
 
-pub fn deserialize(input: &[u8]) -> Option<PhyPayload> {
+pub fn deserialize(input: &[u8]) -> Result<PhyPayload, &'static str> {
     use nom::{Finish, Parser};
 
     fn parse_array<const N: usize>(input: &[u8]) -> nom::IResult<&[u8], [u8; N]> {
@@ -81,8 +81,8 @@ pub fn deserialize(input: &[u8]) -> Option<PhyPayload> {
     .parse(input)
     .finish()
     .map(|(_, header)| header) {
-        Ok(x) => return Some(x),
-        _=> return None,
+        Ok(x) => return Ok(x),
+        Err(x)=> return Err("failed to deserialize phypayload"),
     }
 }
 
