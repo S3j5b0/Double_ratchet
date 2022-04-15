@@ -12,8 +12,6 @@ pub fn encrypt(
     plaintext: &[u8],
     ad: &[u8],
 ) -> Vec<u8> {
-
-    // Initialize CCM mode
   
     let ccm: Ccm<Aes128, U8, U13> = Ccm::new(GenericArray::from_slice(key));
 
@@ -26,7 +24,6 @@ pub fn encrypt(
         },
     ).expect("failed to encrypt");
 
-   // println!("ciperhtet: {:?}", dst_out_ct);
     dst_out_ct
 }
 

@@ -12,7 +12,6 @@ pub fn concat(mtype: i8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:&[u8]) ->Vec
     buffer.extend_from_slice(&nonce);
     buffer.extend([n.to_be_bytes(), dh_id.to_be_bytes()].concat().to_vec());
     buffer
-
 }
 
 

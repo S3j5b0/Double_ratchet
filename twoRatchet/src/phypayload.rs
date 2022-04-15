@@ -82,7 +82,7 @@ pub fn deserialize(input: &[u8]) -> Result<PhyPayload, &'static str> {
     .finish()
     .map(|(_, header)| header) {
         Ok(x) => return Ok(x),
-        Err(x)=> return Err("failed to deserialize phypayload"),
+        Err(_)=> return Err("failed to deserialize phypayload"),
     }
 }
 
