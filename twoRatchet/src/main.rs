@@ -28,7 +28,7 @@ fn main() {
 
     let newpk = ed_ratchet.initiate_ratch();
 
-    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), &devaddr);
+    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
 
         
     let dec0 = match as_ratchet.receive(enci){
@@ -55,7 +55,7 @@ fn main() {
 
 
 
-    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), &devaddr);
+    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
 
         
     let dec0 = match as_ratchet.receive(enci){
@@ -68,7 +68,7 @@ fn main() {
 
     
     for n in 1..20 {
-        let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec(), &devaddr);
+        let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
 
         
         let dec0 = match as_ratchet.receive(enci){

@@ -11,12 +11,10 @@ use super::{
     phypayload::{PhyPayload, deserialize},
     kdf::{kdf_ck,kdf_rk},
 };
-pub const CONSTANT_NONCE: [u8;13] = [42;13];
 
 
 pub struct EDRatchet <Rng: CryptoRng + RngCore>
 {
-    shared_secret : Option<[u8;32]>,
     rk: [u8;32],
     sck: [u8;32], // sending chain key
     rck: [u8;32], // receiving chain key
@@ -25,6 +23,7 @@ pub struct EDRatchet <Rng: CryptoRng + RngCore>
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
+    shared_secret : [u8;32],
     dhr_req_nonce : u16,
     dhr_ack_nonce : u16,
     dh_id : u16,
@@ -34,18 +33,17 @@ pub struct EDRatchet <Rng: CryptoRng + RngCore>
 
 impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
 {
-    pub fn new (sk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :[u8;4], rng :Rng) -> Self {
-
+    pub fn new (rk: [u8; 32],  rck: [u8; 32], sck: [u8; 32],  devaddr :[u8;4], rng :Rng) -> Self {
         EDRatchet {
-            shared_secret: None,
-            rk: sk,
-            sck: sck,
-            rck: rck,
+            rk,
+            sck,
+            rck,
             fcnt_down: 0,
             fcnt_up: 0,
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
+            shared_secret: [0;32],
             dhr_req_nonce: 0,
             dhr_ack_nonce: 0,
             dh_id: 0,
@@ -61,16 +59,13 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
 
     pub fn initiate_ratch(&mut self) -> Vec<u8> {
         let ed_dh_privkey : StaticSecret  = StaticSecret::new(&mut self.rng);
-        let i_dh_public_key = PublicKey::from(&ed_dh_privkey);
-
-        self.tmp_pkey = Some(i_dh_public_key);
+        let ed_dh_public_key = PublicKey::from(&ed_dh_privkey);
+        self.tmp_pkey = Some(ed_dh_public_key);
         self.tmp_skey = Some(ed_dh_privkey);
-
         self.dhr_req_nonce += 1;
-        let concat_dhr = prepare_dhr(&i_dh_public_key.as_bytes().to_vec(), self.dhr_req_nonce);
+        let dhr_ack = prepare_dhr(ed_dh_public_key.as_bytes(), self.dhr_req_nonce);
         
-        let enc = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),5).to_vec();
-        enc
+        self.ratchet_encrypt(&dhr_ack,5)
     }
 
     /// The actual ratcheting function, this creates the new state
@@ -98,17 +93,17 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         buf.copy_from_slice(&dhr_ack.pk[..32]);
         let as_dh_public_key = PublicKey::from(buf);
 
-        let ed_dh_privkey = self.tmp_skey.clone().unwrap();
+        let ed_dh_privkey = self.tmp_skey.as_ref().unwrap();
 
         // we generate a shared secret from the incoming public key
 
-        self.shared_secret = Some(*ed_dh_privkey.diffie_hellman(&as_dh_public_key).as_bytes());
+        self.shared_secret = *ed_dh_privkey.diffie_hellman(&as_dh_public_key).as_bytes();
 
         // Then we advance the actual root chain
 
-        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
+        let (rk, sck) = kdf_rk(self.shared_secret, &self.rk);
         
-        let (rk, rck) = kdf_rk(self.shared_secret.unwrap(),&rk);
+        let (rk, rck) = kdf_rk(self.shared_secret,&rk);
 
 
         // we skip a constant amount of the root chain
@@ -135,16 +130,23 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// * `ad` - associated data, most likely the devaddr
     /// * `mtype` - the mtype, which should also be authenticated
 
-    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], mtype : i8) -> Vec<u8> {
         let (sck, mk) = kdf_ck(&self.sck);
         self.sck = sck;
                 
         let mut nonce = [0;13];
         self.rng.fill_bytes(&mut nonce);
 
-        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_up, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], 
+                                    &nonce, plaintext, 
+                                    &concat(
+                                        mtype, 
+                                        nonce, 
+                                        self.dh_id, 
+                                        self.fcnt_up, 
+                                        self.devaddr)); 
 
-        let phypayload = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_up,self.dh_id,encrypted_data,nonce);
+        let phypayload = PhyPayload::new(mtype, self.devaddr, self.fcnt_up,self.dh_id,encrypted_data,nonce);
  
         self.fcnt_up += 1;
         phypayload.serialize()  
@@ -157,10 +159,8 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// * `plaintext` - The stuff to be encrypted
     /// * `ad` - associated data, most likely the devaddr
 
-    pub fn ratchet_encrypt_payload(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
-        
-        let hdr = self.ratchet_encrypt(plaintext, ad,7);
-        hdr
+    pub fn ratchet_encrypt_payload(&mut self, plaintext: &[u8]) -> Vec<u8> {
+        self.ratchet_encrypt(plaintext,7)
     }
 
 
@@ -175,7 +175,6 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
         let deserial_phy = deserialize(&phypayload)?;
 
-
         match self.try_skipped_message_keys(&deserial_phy)  {
             Some(out) => Ok(out),
             None => {
@@ -185,14 +184,14 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
                 self.rck = rck;
                 self.fcnt_down += 1;
 
-                return decrypt(&mk[..16],
+                decrypt(&mk[..16],
                     &deserial_phy.nonce, 
                     &deserial_phy.ciphertext, 
                     &concat(deserial_phy.mtype,
-                    deserial_phy.nonce,
-                    deserial_phy.dh_pub_id,
-                    deserial_phy.fcnt, 
-                    &deserial_phy.devaddr));
+                            deserial_phy.nonce,
+                            deserial_phy.dh_pub_id,
+                            deserial_phy.fcnt, 
+                            deserial_phy.devaddr))
             }
         }
     }
@@ -206,7 +205,6 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
                 self.mk_skipped.insert((self.dh_id, self.fcnt_down), mk);
                 self.fcnt_down += 1
                 }
-                return
     }
     
 
@@ -222,15 +220,15 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
                 &phypayload.nonce,
                 &phypayload.ciphertext, 
                 &concat(phypayload.mtype,
-                    phypayload.nonce,
+                        phypayload.nonce,
                         phypayload.dh_pub_id,
                         phypayload.fcnt, 
-                        &self.devaddr)) 
+                        self.devaddr)) 
                     {
                     Ok(x) => Some(x),
                     Err(_) => None,
                 }            },
-            false => return None
+            false => None
         } 
     }
 
@@ -247,7 +245,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
             6 => {
                 match self.ratchet(input) {
                     Ok(()) => Ok(None),
-                    Err(s) => return Err(s),
+                    Err(s) => Err(s),
                 }
             },
             8 => {
@@ -257,7 +255,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
                 }
             }
             _ => {
-                return Err("unkown mtype");
+                Err("unkown mtype")
             }
 
         }

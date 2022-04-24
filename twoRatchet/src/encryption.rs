@@ -48,7 +48,7 @@ pub fn decrypt(
 
      match dst_out_pt {
          Ok(x) => Ok(x),
-         Err(s) => Err("Aead decryption error")
+         Err(_) => Err("Error during AEAD decryption")
      }
     
 }

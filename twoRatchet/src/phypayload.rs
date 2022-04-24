@@ -12,14 +12,14 @@ pub struct PhyPayload {
 }
 
 impl PhyPayload {
-    pub fn new( mtype : i8,devaddr:[u8;4],n: u16, dh_pub_id: u16, cipher: Vec<u8>,nonce :[u8;13]) -> Self {
+    pub fn new( mtype : i8,devaddr:[u8;4],fcnt: u16, dh_pub_id: u16, ciphertext: Vec<u8>,nonce :[u8;13]) -> Self {
         PhyPayload {
-            mtype: mtype,
-            nonce: nonce,
-            devaddr:devaddr,
-            fcnt : n,
-            dh_pub_id: dh_pub_id,
-            ciphertext: cipher,
+            mtype,
+            nonce,
+            devaddr,
+            fcnt,
+            dh_pub_id,
+            ciphertext,
             
         }
     }
@@ -81,8 +81,8 @@ pub fn deserialize(input: &[u8]) -> Result<PhyPayload, &'static str> {
     .parse(input)
     .finish()
     .map(|(_, header)| header) {
-        Ok(x) => return Ok(x),
-        Err(_)=> return Err("failed to deserialize phypayload"),
+        Ok(x) => Ok(x),
+        Err(_)=> Err("failed to deserialize phypayload"),
     }
 }
 

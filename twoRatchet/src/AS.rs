@@ -18,17 +18,17 @@ use super::{
 
 pub struct ASRatchet <Rng: CryptoRng + RngCore>
 {
-    pub shared_secret : Option<[u8;32]>,
-    pub rk: [u8;32],
-    pub sck: Option<[u8;32]>, // sending chain key
-    pub rck: Option<[u8;32]>, // receiving chain key
+    rk: [u8;32],
+    sck: [u8;32], // sending chain key
+    rck: [u8;32], // receiving chain key
     pub fcnt_up: u16, // sending message numbering
     pub fcnt_down: u16, // receiving message numbering
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_shared_secret : Option<[u8;32]>,
+    shared_secret : Option<[u8;32]>,
     dhr_ack_nonce : u16,
     dhr_res_nonce : u16,
-    pub dh_id : u16,
+    dh_id : u16,
     devaddr : [u8;4],
     rng: Rng,
 }
@@ -36,13 +36,13 @@ pub struct ASRatchet <Rng: CryptoRng + RngCore>
 impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
 {
 
-    pub fn new(sk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :[u8;4], rng:Rng) -> Self {
+    pub fn new(rk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :[u8;4], rng:Rng) -> Self {
 
         ASRatchet {
             shared_secret : None,
-            rk: sk,
-            sck: Some(sck),
-            rck: Some(rck),
+            rk,
+            sck,
+            rck,
             fcnt_down: 0,
             fcnt_up: 0,
             mk_skipped: BTreeMap::new(),
@@ -55,10 +55,10 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
         }
     }
 
-    fn ratchet(&mut self, dhr_encrypted:Vec<u8>) -> Result<Vec<u8>, &str> {
+    fn ratchet(&mut self, dhr_req_encrypted:Vec<u8>) -> Result<Vec<u8>, &str> {
 
         // first, attempt to decrypt incoming key
-        let dhr_serial = self.ratchet_decrypt(dhr_encrypted)?;
+        let dhr_serial = self.ratchet_decrypt(dhr_req_encrypted)?;
         
         // then we deserialize dhr and create our own dhrackknowledgement message
         let dhr_req = unpack_dhr(dhr_serial)?;
@@ -71,7 +71,7 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
 
         let mut buf = [0; 32];
         buf.copy_from_slice(&dhr_req.pk[..32]);
-        let i_dh_public_key = PublicKey::from(buf);
+        let ed_dh_public_key = PublicKey::from(buf);
 
         let as_dh_privkey : StaticSecret  = StaticSecret::new(&mut self.rng);
         let as_dh_public_key = PublicKey::from(&as_dh_privkey);
@@ -81,12 +81,12 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
         self.dhr_ack_nonce += 1;
 
         
-        let concat_dhr = prepare_dhr(&as_dh_public_key.as_bytes().to_vec(), self.dhr_ack_nonce);
-        let dhr_ack = self.ratchet_encrypt(&concat_dhr, &self.devaddr.clone(),6).to_vec();
+        let concat_dhr = prepare_dhr(as_dh_public_key.as_bytes(), self.dhr_ack_nonce);
+        let dhr_ack = self.ratchet_encrypt(&concat_dhr,6);
             
-        self.tmp_shared_secret = Some(*as_dh_privkey.diffie_hellman(&i_dh_public_key).as_bytes());
+        self.tmp_shared_secret = Some(*as_dh_privkey.diffie_hellman(&ed_dh_public_key).as_bytes());
 
-        // return the key
+
         Ok(dhr_ack) 
         
     }
@@ -104,8 +104,8 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
 
 
         self.rk = rk;
-        self.sck =  Some(sck);
-        self.rck =  Some(rck);
+        self.sck =  sck;
+        self.rck =  rck;
         self.fcnt_down= 0;
         self.fcnt_up= 0;
 
@@ -113,27 +113,24 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
 
 
 
-    fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8], mtype : i8) -> Vec<u8> {
-        let (cks, mk) = kdf_ck(&self.sck.unwrap());
-        self.sck = Some(cks);
+    fn ratchet_encrypt(&mut self, plaintext: &[u8], mtype : i8) -> Vec<u8> {
+        let (cks, mk) = kdf_ck(&self.sck);
+        self.sck = cks;
                 
         let mut nonce = [0;13];
         self.rng.fill_bytes(&mut nonce);
 
 
-        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_down, &ad)); // concat
+        let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_down,self.devaddr)); // concat
 
-        let phypayload = PhyPayload::new(mtype, ad.try_into().unwrap(), self.fcnt_down,self.dh_id,encrypted_data.clone(),nonce);
+        let phypayload = PhyPayload::new(mtype, self.devaddr, self.fcnt_down,self.dh_id,encrypted_data,nonce);
  
         self.fcnt_down += 1;
-        let hdr = phypayload.serialize(); 
-        hdr
+        phypayload.serialize()
     }
 
-    pub fn ratchet_encrypt_payload(&mut self, plaintext: &[u8], ad: &[u8]) -> Vec<u8> {
-        
-        let hdr = self.ratchet_encrypt(plaintext, ad,8);
-        hdr
+    pub fn ratchet_encrypt_payload(&mut self, plaintext: &[u8]) -> Vec<u8> {
+        self.ratchet_encrypt(plaintext,8)
     }
     
     fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
@@ -150,8 +147,8 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
             None => {
 
                 self.skip_message_keys(deserial_phy.fcnt);
-                let (rck, mk) = kdf_ck(&self.rck.unwrap());
-                self.rck = Some(rck);
+                let (rck, mk) = kdf_ck(&self.rck);
+                self.rck = rck;
                 self.fcnt_up += 1;
 
                 
@@ -162,7 +159,7 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
                         deserial_phy.nonce,
                         deserial_phy.dh_pub_id,
                         deserial_phy.fcnt, 
-                        &self.devaddr))
+                        self.devaddr))
             }
         }
     }
@@ -171,16 +168,12 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
 
     fn skip_message_keys(&mut self, until: u16)  {
 
-        if self.rck == None {
-            return 
-        }
            while self.fcnt_up  < until {
-                let (ckr, mk) = kdf_ck(&self.rck.unwrap());
-                self.rck = Some(ckr);
+                let (rck, mk) = kdf_ck(&self.rck);
+                self.rck = rck;
                 self.mk_skipped.insert((self.dh_id, self.fcnt_up), mk);
                 self.fcnt_up += 1
                 }
-                return
     }
     
 
@@ -199,12 +192,12 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
                         phypayload.nonce,
                         phypayload.dh_pub_id,
                         phypayload.fcnt, 
-                        &self.devaddr)) 
+                        self.devaddr)) 
                     {
                     Ok(x) => Some(x),
                     Err(_) => None,
                 }            },
-            false => return None
+            false => None
         } 
     }
 
@@ -225,12 +218,12 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
             },
             7 => {
                 match self.ratchet_decrypt(input){
-                    Ok(x) => return Ok((x,false)),
-                    Err(s) => return Err(s)
+                    Ok(x) =>  Ok((x,false)),
+                    Err(s) =>  Err(s)
                 }
             },
             _ => {
-                return Err("unkown mtype");
+                Err("unkown mtype")
             }
         }
     }

@@ -5,12 +5,12 @@ use alloc::vec::Vec;
 
 
 /// Concat header with associated data
-pub fn concat(mtype: i8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:&[u8]) ->Vec<u8> {
+pub fn concat(mtype: i8,nonce : [u8;13],dh_id : u16,n: u16, devaddr:[u8;4]) ->Vec<u8> {
     let mut buffer : Vec<u8> = Vec::with_capacity(17+devaddr.len());
-    buffer.extend_from_slice(devaddr);
+    buffer.extend_from_slice(&devaddr);
     buffer.extend_from_slice(&[mtype as u8]);
     buffer.extend_from_slice(&nonce);
-    buffer.extend([n.to_be_bytes(), dh_id.to_be_bytes()].concat().to_vec());
+    buffer.extend([n.to_be_bytes(), dh_id.to_be_bytes()].concat());
     buffer
 }
 
@@ -38,29 +38,29 @@ pub fn unpack_dhr(input: Vec<u8>) -> Result<DhPayload, &'static str>{
             parse_array,
         ))
         .map(|(nonce, pk) :(_, [_; 32])| DhPayload {
-            pk : pk.to_vec(),
+            pk,
             nonce,
         }),
     )
     .parse(&input)
     .finish()
     .map(|(_, dhr)| dhr) {
-        Ok(x) => return Ok(x),
-        _=> return Err("Could not parse dhr"),
+        Ok(x) =>  Ok(x),
+        _=>  Err("Could not parse dhr"),
     }
 }
 
 pub struct DhPayload {
-    pub pk: Vec<u8>, // public key that is sent
+    pub pk: [u8;32], // public key that is sent
     pub nonce : u16, // DHRAckNonce, or DHRResNonce
 }
 impl DhPayload {
 
 
-    pub fn new( pk : Vec<u8>, nonce : u16) -> Self {
+    pub fn new( pk : [u8;32], nonce : u16) -> Self {
         DhPayload {
-            pk: pk,
-            nonce: nonce,
+            pk,
+            nonce,
         }
     }
 
