@@ -1,7 +1,7 @@
 use rand_core::OsRng;
 
-use twoRatchet::AS::ASRatchet;
-use twoRatchet::ED::EDRatchet;
+use doubleratchet::r#as::ASRatchet;
+use doubleratchet::ed::EDRatchet;
 extern crate alloc;
 
 fn main() {

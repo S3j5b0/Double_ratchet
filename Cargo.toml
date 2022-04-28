@@ -1,5 +1,5 @@
 [package]
-name = "twoRatchet"
+name = "doubleratchet"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,7 +15,7 @@ generic-array = "0.14.5"
 sha2 = { version = "0.8.0", default-features = false }
 ccm = "0.4.4"
 aes = "0.7.5"
-nom = {verion = "7.1.1",default-features = false,features = ["alloc"] }
+nom = {version = "7.1.1", default-features = false, features = ["alloc"] }
 x25519-dalek-ng = { version = "1.1.1", default-features = false, features = ["u32_backend"] }
 
 

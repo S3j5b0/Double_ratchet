@@ -5,8 +5,8 @@ extern crate alloc;
 
 
 
-pub mod ED;
-pub mod AS;
+pub mod ed;
+pub mod r#as;
 
 pub mod kdf;
 pub mod encryption;
