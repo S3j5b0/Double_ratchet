@@ -10,7 +10,7 @@ use rand_core::{RngCore, CryptoRng};
 use super::{
     encryption::{encrypt,decrypt},
     dhr::{concat,prepare_dhr,unpack_dhr},
-    phypayload::{PhyPayload, deserialize},
+    phypayload::{PhyPayload, deserialize_phy},
     kdf::{kdf_ck,kdf_rk},
 };
 
@@ -124,6 +124,7 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
         let encrypted_data = encrypt(&mk[..16], &nonce, plaintext, &concat(mtype, nonce, self.dh_id, self.fcnt_down,self.devaddr)); // concat
 
         let phypayload = PhyPayload::new(mtype, self.devaddr, self.fcnt_down,self.dh_id,encrypted_data,nonce);
+
  
         self.fcnt_down += 1;
         phypayload.serialize()
@@ -136,7 +137,7 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
     fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
 
 
-        let deserial_phy =  deserialize(&phypayload)?;
+        let deserial_phy =  deserialize_phy(&phypayload)?;
 
         if self.dh_id < deserial_phy.dh_pub_id {
             self.finalize_ratchet();

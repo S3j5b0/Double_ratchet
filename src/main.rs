@@ -30,7 +30,7 @@ fn main() {
 
     let _newpk = ed_ratchet.initiate_ratch();
 
-    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
+    let enci = ed_ratchet.ratchet_encrypt_payload(b"msg");
 
     let dec0 = match as_ratchet.receive(enci) {
         Ok((x, _b)) => x,
@@ -53,7 +53,7 @@ fn main() {
     }
     // A test where a message is encrpyted, and a ratcheting procedure is performed 10 times.
 
-    let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
+    let enci = ed_ratchet.ratchet_encrypt_payload(b"msg");
 
     let dec0 = match as_ratchet.receive(enci) {
         Ok((x, _b)) => x,
@@ -63,14 +63,14 @@ fn main() {
     assert_eq!(dec0, b"msg".to_vec());
 
     for n in 1..20 {
-        let enci = ed_ratchet.ratchet_encrypt_payload(&b"msg".to_vec());
+        let enci = ed_ratchet.ratchet_encrypt_payload(b"msg");
 
         let dec0 = match as_ratchet.receive(enci) {
             Ok((x, _b)) => x,
             Err(s) => panic!("error {}", s),
         };
 
-        assert_eq!(dec0, b"msg".to_vec());
+        assert_eq!(dec0, "msg");
 
         let newpk = ed_ratchet.initiate_ratch();
         // R recevies dhr res

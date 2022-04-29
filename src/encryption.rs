@@ -34,7 +34,7 @@ pub fn decrypt(
     ciphertext: &[u8],
     ad: &[u8],
 ) -> Result<Vec<u8>,&'static str> {
-
+    
     // Initialize CCM mode
     let ccm: Ccm<Aes128, U8, U13> = Ccm::new(GenericArray::from_slice(key));
     // Verify tag, if correct then decrypt and place plaintext in dst_out_pt

@@ -8,7 +8,7 @@ use rand_core::{RngCore,CryptoRng};
 use super::{
     encryption::{encrypt,decrypt},
     dhr::{concat,prepare_dhr,unpack_dhr},
-    phypayload::{PhyPayload, deserialize},
+    phypayload::{PhyPayload, deserialize_phy},
     kdf::{kdf_ck,kdf_rk},
 };
 
@@ -173,7 +173,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
     /// * `mtype` - the mtype, which should also be authenticated
     
     fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-        let deserial_phy = deserialize(&phypayload)?;
+        let deserial_phy = deserialize_phy(&phypayload)?;
 
         match self.try_skipped_message_keys(&deserial_phy)  {
             Some(out) => Ok(out),

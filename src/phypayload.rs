@@ -51,7 +51,7 @@ impl PhyPayload {
 
 }
 
-pub fn deserialize(input: &[u8]) -> Result<PhyPayload, &'static str> {
+pub fn deserialize_phy(input: &[u8]) -> Result<PhyPayload, &'static str> {
     use nom::{Finish, Parser};
 
     fn parse_array<const N: usize>(input: &[u8]) -> nom::IResult<&[u8], [u8; N]> {
