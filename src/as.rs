@@ -25,7 +25,6 @@ pub struct ASRatchet <Rng: CryptoRng + RngCore>
     pub fcnt_down: u16, // receiving message numbering
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_shared_secret : Option<[u8;32]>,
-    shared_secret : Option<[u8;32]>,
     dhr_ack_nonce : u16,
     dhr_res_nonce : u16,
     dh_id : u16,
@@ -39,7 +38,6 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
     pub fn new(rk: [u8; 32], rck: [u8; 32], sck: [u8; 32],  devaddr :[u8;4], rng:Rng) -> Self {
 
         ASRatchet {
-            shared_secret : None,
             rk,
             sck,
             rck,
@@ -91,11 +89,11 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
         
     }
     fn finalize_ratchet(&mut self)   {
-        self.shared_secret = self.tmp_shared_secret;
+        let shared_secret = self.tmp_shared_secret;
         
-        let (rk, rck) = kdf_rk(self.shared_secret.unwrap(), &self.rk);
+        let (rk, rck) = kdf_rk(shared_secret.unwrap(), &self.rk);
         
-        let (rk, sck) = kdf_rk(self.shared_secret.unwrap(),&rk);
+        let (rk, sck) = kdf_rk(shared_secret.unwrap(),&rk);
         if self.mk_skipped.len() > 500 {
             self.prune_mkskipped();
         }

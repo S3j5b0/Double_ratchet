@@ -70,7 +70,7 @@ fn main() {
             Err(s) => panic!("error {}", s),
         };
 
-        assert_eq!(dec0, "msg");
+        assert_eq!(dec0, b"msg".to_vec());
 
         let newpk = ed_ratchet.initiate_ratch();
         // R recevies dhr res

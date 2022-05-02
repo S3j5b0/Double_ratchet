@@ -23,7 +23,6 @@ pub struct EDRatchet <Rng: CryptoRng + RngCore>
     mk_skipped : BTreeMap<(u16, u16), [u8; 32]>,
     tmp_pkey : Option<PublicKey>,
     tmp_skey : Option<StaticSecret>,
-    shared_secret : [u8;32],
     dhr_req_nonce : u16,
     dhr_ack_nonce : u16,
     dh_id : u16,
@@ -43,7 +42,6 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
             mk_skipped: BTreeMap::new(),
             tmp_pkey: None,
             tmp_skey: None,
-            shared_secret: [0;32],
             dhr_req_nonce: 0,
             dhr_ack_nonce: 0,
             dh_id: 0,
@@ -93,17 +91,16 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         buf.copy_from_slice(&dhr_ack.pk[..32]);
         let as_dh_public_key = PublicKey::from(buf);
 
-        let ed_dh_privkey = self.tmp_skey.as_ref().unwrap();
 
         // we generate a shared secret from the incoming public key
 
-        self.shared_secret = *ed_dh_privkey.diffie_hellman(&as_dh_public_key).as_bytes();
+        let shared_secret = *self.tmp_skey.as_ref().unwrap().diffie_hellman(&as_dh_public_key).as_bytes();
 
         // Then we advance the actual root chain
 
-        let (rk, sck) = kdf_rk(self.shared_secret, &self.rk);
+        let (rk, sck) = kdf_rk(shared_secret, &self.rk);
         
-        let (rk, rck) = kdf_rk(self.shared_secret,&rk);
+        let (rk, rck) = kdf_rk(shared_secret,&rk);
 
 
         // we skip a constant amount of the root chain
