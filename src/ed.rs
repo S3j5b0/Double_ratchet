@@ -107,7 +107,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         if self.mk_skipped.len() > 500 {
             self.prune_mkskipped();
         }
-        self.skip_message_keys(500);
+        self.skip_message_keys(10);
 
         self.dh_id += 1;
 
@@ -236,7 +236,7 @@ impl<Rng: CryptoRng + RngCore> EDRatchet <Rng>
         });
         
     }
- 
+
     pub fn receive(&mut self,input: Vec<u8>) -> Result<Option<Vec<u8>>,&str>{
         match input[0] {
             6 => {
