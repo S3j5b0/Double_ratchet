@@ -97,7 +97,7 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
         if self.mk_skipped.len() > 500 {
             self.prune_mkskipped();
         }
-        self.skip_message_keys(20);
+        self.skip_message_keys(10);
         self.dh_id += 1;
 
 
