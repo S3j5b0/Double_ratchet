@@ -1,4 +1,4 @@
-use criterion::{ criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{ criterion_group, criterion_main, BatchSize, Criterion,black_box};
 use rand_core::OsRng;
 use doubleratchet::r#as::ASRatchet;
 use doubleratchet::ed::EDRatchet;
@@ -25,23 +25,7 @@ fn edhoc_detailed(c: &mut Criterion) {
     
     let mut group = c.benchmark_group("double_ratchet_detailed");
 
-    group.bench_function("as_skip_dhr", |b| {
-        b.iter_batched(
-            || {
-                let mut ed_ratchet = EDRatchet::new(SK,UPLINK,DOWNLINK, DEVADDR, OsRng);
-                let mut as_ratchet = ASRatchet::new(SK, DOWNLINK, UPLINK, DEVADDR, OsRng);
-                let dhr_req = ed_ratchet.initiate_ratch();
-                let dhr_ack = as_ratchet.receive(dhr_req).unwrap().0;
-                let none = ed_ratchet.receive(dhr_ack).unwrap();
-                assert_eq!(none,None);
-                let _lost_uplink = ed_ratchet.ratchet_encrypt_payload(b"lostMessage");
-                let ciphertext = ed_ratchet.ratchet_encrypt_payload(b"message");
-                (as_ratchet,ciphertext)
-            },
-            |(mut as_ratchet, ciphertext)| as_ratchet.receive(ciphertext).unwrap(),
-            BatchSize::SmallInput,
-        )
-    });
+
 
     group.bench_function("ed_build", |b| {
         b.iter(|| {
@@ -145,6 +129,23 @@ fn edhoc_detailed(c: &mut Criterion) {
         )
     });
 
+    group.bench_function("as_finalize", |b| {
+        b.iter_batched(
+            || {
+                let mut ed_ratchet = EDRatchet::new(SK,UPLINK,DOWNLINK, DEVADDR, OsRng);
+                let mut as_ratchet = ASRatchet::new(SK, DOWNLINK, UPLINK, DEVADDR, OsRng);
+                let dhr_req = ed_ratchet.initiate_ratch();
+                let dhr_ack = as_ratchet.receive(dhr_req).unwrap().0;
+                let _none = ed_ratchet.receive(dhr_ack).unwrap();
+                let uplink_ack = ed_ratchet.ratchet_encrypt_payload(b"Message");
+                (as_ratchet, uplink_ack)
+            },
+            |(mut as_ratchet, uplink_ack)| as_ratchet.receive(uplink_ack).unwrap(),
+            BatchSize::SmallInput,
+        )
+    });
+
+
 
     group.bench_function("ed_skip1", |b| {
         b.iter_batched(
@@ -175,7 +176,23 @@ fn edhoc_detailed(c: &mut Criterion) {
     });
 
 
-    // as receive 
+    group.bench_function("as_skip_dhr", |b| {
+        b.iter_batched(
+            || {
+                let mut ed_ratchet = EDRatchet::new(SK,UPLINK,DOWNLINK, DEVADDR, OsRng);
+                let mut as_ratchet = ASRatchet::new(SK, DOWNLINK, UPLINK, DEVADDR, OsRng);
+                let dhr_req = ed_ratchet.initiate_ratch();
+                let dhr_ack = as_ratchet.receive(dhr_req).unwrap().0;
+                let none = ed_ratchet.receive(dhr_ack).unwrap();
+                assert_eq!(none,None);
+                let _lost_uplink = ed_ratchet.ratchet_encrypt_payload(b"lostMessage");
+                let ciphertext = ed_ratchet.ratchet_encrypt_payload(b"message");
+                (as_ratchet,ciphertext)
+            },
+            |(mut as_ratchet, ciphertext)| as_ratchet.receive(ciphertext).unwrap(),
+            BatchSize::SmallInput,
+        )
+    });
 
 
 
