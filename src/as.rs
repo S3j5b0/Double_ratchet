@@ -134,7 +134,6 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
     
     fn ratchet_decrypt(&mut self, phypayload: Vec<u8>) -> Result<Vec<u8>, &'static str> {
 
-
         let deserial_phy =  deserialize_phy(&phypayload)?;
 
         if self.dh_id < deserial_phy.dh_pub_id {
@@ -179,7 +178,6 @@ impl <Rng: CryptoRng + RngCore>ASRatchet <Rng>
     fn try_skipped_message_keys(&mut self, phypayload: &PhyPayload) -> Option<Vec<u8>> {
         match self.mk_skipped.contains_key(&(phypayload.dh_pub_id, phypayload.fcnt)) {
             true => {
-                
             let mk = *self.mk_skipped.get(&(phypayload.dh_pub_id, phypayload.fcnt))
                 .unwrap();
             self.mk_skipped.remove(&(phypayload.dh_pub_id, phypayload.fcnt)).unwrap();

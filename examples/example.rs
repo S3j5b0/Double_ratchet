@@ -3,8 +3,23 @@ use rand_core::OsRng;
 use doubleratchet::r#as::ASRatchet;
 use doubleratchet::ed::EDRatchet;
 extern crate alloc;
+pub const  SK : [u8;32] = [
+    16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29,
+    68, 31, 49, 89, 67, 233, 53, 16, 210, 28, 207,
+];
+pub const DOWNLINK : [u8;32] = [
+    0, 171, 247, 26, 19, 92, 119, 193, 156, 216, 49, 89, 90, 174, 165, 23, 124, 247, 30, 79,
+    73, 164, 55, 63, 178, 39, 228, 26, 180, 224, 173, 104,
+];
+pub const UPLINK : [u8;32] = [
+    218, 132, 151, 66, 151, 72, 196, 104, 152, 13, 117, 94, 224, 7, 231, 216, 62, 155, 135, 52,
+    59, 100, 217, 236, 115, 100, 161, 95, 8, 146, 123, 146,
+];
+pub const DEVADDR : [u8;4] = [1, 2, 3, 2];
 
 fn main() {
+
+    
     // handshake is finished, sk is the finished output that the two parties share
     let sk = [
         16, 8, 7, 78, 159, 104, 210, 58, 89, 216, 177, 79, 10, 252, 39, 141, 8, 160, 148, 36, 29,
@@ -83,4 +98,5 @@ fn main() {
             let _ratchdone = ed_ratchet.receive(dh_ack);
         }
     }
+    
 }
